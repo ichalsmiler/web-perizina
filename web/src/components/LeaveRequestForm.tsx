@@ -30,6 +30,16 @@ export default function LeaveRequestForm({ student }: Props) {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  const isWhatsappValid = /^\d{9,12}$/.test(parentWhatsapp);
+  const isDateRangeValid = !!startDate && !!endDate && endDate >= startDate;
+  const isFormComplete =
+    !!parentName.trim() &&
+    isWhatsappValid &&
+    !!leaveType &&
+    isDateRangeValid &&
+    !!selfie &&
+    agreedToStatement;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -261,7 +271,7 @@ export default function LeaveRequestForm({ student }: Props) {
 
       <button
         type="submit"
-        disabled={submitting || !agreedToStatement}
+        disabled={submitting || !isFormComplete}
         className="bg-primary text-white rounded-md py-2.5 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {submitting ? "Mengirim..." : "Kirim Pengajuan"}

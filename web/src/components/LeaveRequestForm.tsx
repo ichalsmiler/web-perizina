@@ -23,6 +23,7 @@ export default function LeaveRequestForm({ student }: Props) {
   const [reason, setReason] = useState("");
   const [document, setDocument] = useState<File | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
+  const [agreedToStatement, setAgreedToStatement] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
@@ -51,6 +52,10 @@ export default function LeaveRequestForm({ student }: Props) {
     }
     if (!selfie) {
       setError("Selfie verifikasi wajib diambil sebelum mengirim.");
+      return;
+    }
+    if (!agreedToStatement) {
+      setError("Mohon centang pernyataan sebelum mengirim pengajuan.");
       return;
     }
 
@@ -237,12 +242,27 @@ export default function LeaveRequestForm({ student }: Props) {
         <SelfieCapture onCapture={setSelfie} />
       </div>
 
+      <label className="flex items-start gap-2 text-xs text-neutral-dark bg-neutral-light rounded-md p-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={agreedToStatement}
+          onChange={(e) => setAgreedToStatement(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          Saya menyatakan dengan sebenar-benarnya bahwa anak saya tersebut di
+          atas berhalangan mengikuti kegiatan belajar sekolah dikarenakan
+          alasan tersebut. Data yang diisikan adalah sah dan dapat
+          dipertanggungjawabkan.
+        </span>
+      </label>
+
       {error && <p className="text-sm text-danger">{error}</p>}
 
       <button
         type="submit"
-        disabled={submitting}
-        className="bg-primary text-white rounded-md py-2.5 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60"
+        disabled={submitting || !agreedToStatement}
+        className="bg-primary text-white rounded-md py-2.5 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {submitting ? "Mengirim..." : "Kirim Pengajuan"}
       </button>

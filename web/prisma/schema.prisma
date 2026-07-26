@@ -1,0 +1,70 @@
+// Prisma schema for IzinSiswa (local prototype)
+// Mirrors DATABASE.md, adapted to SQLite for local development.
+// LeaveType/LeaveStatus are plain strings (validated in app code) since SQLite has no native enum support.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  phoneNumber  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  processedRequests LeaveRequest[] @relation("AdminProcessedRequests")
+
+  @@map("admin_users")
+}
+
+model Student {
+  id          String   @id @default(uuid())
+  nis         String   @unique // NIS - Nomor Induk Siswa
+  fullName    String
+  grade       String // Tingkat, e.g. "10"
+  class       String // Kelas/section, e.g. "IPA 1"
+  dateOfBirth DateTime?
+  parentName  String?
+  parentPhone String?
+  parentEmail String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  leaveRequests LeaveRequest[]
+
+  @@map("students")
+}
+
+model LeaveRequest {
+  id          String   @id @default(uuid())
+  ticketCode  String   @unique
+  studentId   String
+  requestDate DateTime @default(now())
+  startDate   DateTime
+  endDate     DateTime
+  leaveType   String // SICK | FAMILY_EMERGENCY | PERMIT | OTHER
+  reason      String?
+  parentName      String // Filled by the submitter, mandatory
+  parentWhatsapp  String // Filled by the submitter, mandatory
+  documentUrl String?
+  selfieUrl   String
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  adminId     String?
+  adminNotes  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student    @relation(fields: [studentId], references: [id])
+  admin   AdminUser? @relation("AdminProcessedRequests", fields: [adminId], references: [id])
+
+  @@map("leave_requests")
+}

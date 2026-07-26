@@ -1,0 +1,23 @@
+[Unit]
+Description=IzinSiswa web app
+After=network.target
+
+[Service]
+Type=simple
+# Adjust User/Group and WorkingDirectory to match where you cloned the repo.
+User=izinsiswa
+Group=izinsiswa
+WorkingDirectory=/opt/izinsiswa/web
+EnvironmentFile=/opt/izinsiswa/web/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+# Basic hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

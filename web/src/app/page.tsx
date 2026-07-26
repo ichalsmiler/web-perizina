@@ -62,7 +62,7 @@ export default function HomePage() {
           className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-3"
         >
           <label htmlFor="query" className="text-sm font-medium">
-            Nama Lengkap atau NIS Siswa
+            Masukkan Nama Lengkap atau NIS Siswa
           </label>
           <input
             id="query"

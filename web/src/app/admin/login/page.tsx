@@ -49,9 +49,9 @@ function LoginForm() {
         className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-3"
       >
         <div>
-          <label className="text-sm font-medium block mb-1">Email</label>
+          <label className="text-sm font-medium block mb-1">Username / Email</label>
           <input
-            type="email"
+            type="text"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}

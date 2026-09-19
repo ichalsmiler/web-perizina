@@ -360,8 +360,11 @@ export default function LeaveRequestForm({ student }: Props) {
 
       <div>
         <label className="text-sm font-medium block mb-1">
-          Verifikasi Selfie (wajib, langsung dari kamera)
+          Foto Verifikasi <span className="text-danger">*wajib</span>
         </label>
+        <p className="text-xs text-neutral-medium mb-2">
+          Foto wajah orang tua/wali sebagai bukti pengajuan.
+        </p>
         <SelfieCapture onCapture={setSelfie} />
       </div>
 

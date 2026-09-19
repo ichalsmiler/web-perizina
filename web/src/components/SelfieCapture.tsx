@@ -18,16 +18,20 @@ export default function SelfieCapture({ onCapture }: Props) {
     "idle" | "starting" | "streaming" | "denied" | "insecure" | "captured"
   >("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // Bypass untuk testing di HTTP (non-secure context) — hanya di development.
-  const isInsecureContext =
-    typeof window !== "undefined" && !window.isSecureContext;
-  const [cameraAttempted, setCameraAttempted] = useState(false);
+  // Browser hanya mengizinkan kamera pada secure context (HTTPS/localhost).
+  // Saat aplikasi diakses lewat http://<ip-lan>:3000, kamera mustahil dibuka,
+  // jadi langsung sediakan jalur unggah foto agar form tetap bisa dikirim.
+  const [isInsecureContext, setIsInsecureContext] = useState(false);
+
+  useEffect(() => {
+    // Dihitung di client saja: window tidak ada saat render di server, dan
+    // menghitungnya langsung saat render membuat HTML server & client berbeda.
+    setIsInsecureContext(
+      !window.isSecureContext || !navigator.mediaDevices?.getUserMedia
+    );
+  }, []);
 
   async function startCamera() {
-    setCameraAttempted(true);
-    // Browser HP hanya mengizinkan kamera di HTTPS (atau localhost). Bila
-    // aplikasi dibuka lewat http://<ip>:3000, navigator.mediaDevices bahkan
-    // tidak tersedia — tampilkan penyebab sebenarnya, bukan "izin ditolak".
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setStatus("insecure");
       return;
@@ -93,7 +97,7 @@ export default function SelfieCapture({ onCapture }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      {(status === "idle" || status === "starting") && (
+      {(status === "idle" || status === "starting") && !isInsecureContext && (
         <button
           type="button"
           onClick={startCamera}
@@ -125,8 +129,7 @@ export default function SelfieCapture({ onCapture }: Props) {
           <p className="text-danger font-medium">Kamera belum bisa diakses.</p>
           <p className="text-neutral-dark leading-relaxed">
             Ketuk ikon gembok/kamera di bilah alamat browser, pilih{" "}
-            <strong>Izinkan kamera</strong>, lalu coba lagi. Selfie wajib
-            diambil langsung dan tidak bisa diunggah dari galeri.
+            <strong>Izinkan kamera</strong>, lalu coba lagi.
           </p>
           <button
             type="button"
@@ -138,31 +141,18 @@ export default function SelfieCapture({ onCapture }: Props) {
         </div>
       )}
 
-      {status === "insecure" && (
-        <div className="text-sm bg-warning/5 border border-warning/30 rounded-md p-4 flex flex-col gap-2">
-          <p className="text-neutral-dark font-medium">
-            Kamera tidak tersedia pada koneksi ini.
+      {isInsecureContext && status !== "captured" && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+            <span>📷</span> Unggah Foto Selfie / Orang Tua
           </p>
-          <p className="text-neutral-dark leading-relaxed">
-            Browser HP hanya mengizinkan kamera bila alamatnya memakai{" "}
-            <strong>https://</strong>. Mohon hubungi admin sekolah agar aplikasi
-            diakses lewat alamat aman.
-          </p>
-        </div>
-      )}
-
-      {isInsecureContext && cameraAttempted && status !== "captured" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium text-amber-800">
-            Mode pengujian (HTTP): selfie wajib tapi kamera diblokir browser.
-          </p>
-          <p className="text-sm text-amber-700">
-            Sebagai gantinya, silakan unggah foto selfie dari galeri:
+          <p className="text-xs text-amber-800 leading-relaxed">
+            Karena halaman diakses melalui jaringan lokal (HTTP), kamera langsung tidak diizinkan oleh browser HP demi keamanan. Silakan unggah foto selfie Anda melalui tombol di bawah:
           </p>
           <input
             type="file"
             accept="image/jpeg,image/png"
-            capture="environment"
+            capture="user"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
@@ -172,7 +162,7 @@ export default function SelfieCapture({ onCapture }: Props) {
                 setStatus("captured");
               }
             }}
-            className="border border-amber-300 rounded-md px-3 py-2.5"
+            className="mt-2 block w-full text-sm text-neutral-dark file:mr-3 file:py-2.5 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-white hover:file:bg-primary file:cursor-pointer border border-neutral-medium rounded-md bg-white p-1"
           />
         </div>
       )}

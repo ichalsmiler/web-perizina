@@ -93,7 +93,7 @@ systemctl --no-pager status "$SERVICE_NAME" || true
 echo
 IP_ADDR="$(hostname -I | awk '{print $1}')"
 echo "IzinSiswa should now be reachable at: http://${IP_ADDR}:3000"
-echo "Admin login: admin@izinsiswa.sch.id / admin123 (change this password!)"
+echo "Admin login: diatur via ADMIN_USERNAME & ADMIN_PASSWORD env vars (default username: admin, password acak jika kosong)."
 echo
 echo "Useful commands:"
 echo "  sudo systemctl status $SERVICE_NAME"

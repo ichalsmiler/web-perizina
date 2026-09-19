@@ -51,8 +51,17 @@ The script (`deploy/install-ubuntu.sh`) will:
 5. Build the production bundle.
 6. Install and start `izinsiswa.service` via systemd (auto-restarts on crash/boot).
 
-When it finishes, it prints the URL (e.g. `http://192.168.x.x:3000`) and the default
-admin login (**change the password after first login** — see below).
+When it finishes, it prints the URL (e.g. `http://192.168.x.x:3000`).
+
+Set the admin credentials with environment variables when running the installer:
+
+```bash
+sudo ADMIN_USERNAME=smada ADMIN_PASSWORD='your-strong-password' bash deploy/install-ubuntu.sh
+```
+
+If `ADMIN_PASSWORD` is omitted, a random password is generated and printed once —
+copy it immediately. Re-running the seed later without `ADMIN_PASSWORD` leaves an
+existing admin's password untouched, so updates never reset it.
 
 ## 4. Updating after code changes
 

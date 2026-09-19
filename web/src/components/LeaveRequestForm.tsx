@@ -176,26 +176,30 @@ export default function LeaveRequestForm({ student }: Props) {
         <p className="text-xs text-neutral-medium mb-3">
           Data Orang Tua/Wali yang Mengajukan
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">
+            <label htmlFor="parent-name" className="text-sm font-medium block mb-1">
               Nama Orang Tua/Wali
             </label>
             <input
+              id="parent-name"
               type="text"
+              autoComplete="name"
               value={parentName}
               onChange={(e) => setParentName(e.target.value)}
               placeholder="Nama lengkap"
-              className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+              className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
             />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">
+            <label htmlFor="parent-wa" className="text-sm font-medium block mb-1">
               Nomor WhatsApp
             </label>
             <input
+              id="parent-wa"
               type="tel"
               inputMode="numeric"
+              autoComplete="tel"
               pattern="[0-9]*"
               maxLength={12}
               value={parentWhatsapp}
@@ -203,18 +207,21 @@ export default function LeaveRequestForm({ student }: Props) {
                 setParentWhatsapp(e.target.value.replace(/\D/g, "").slice(0, 12))
               }
               placeholder="08xxxxxxxxxx"
-              className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+              className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
             />
           </div>
         </div>
       </div>
 
       <div>
-        <label className="text-sm font-medium block mb-1">Jenis Izin</label>
+        <label htmlFor="leave-type" className="text-sm font-medium block mb-1">
+          Jenis Izin
+        </label>
         <select
+          id="leave-type"
           value={leaveType}
           onChange={(e) => setLeaveType(e.target.value)}
-          className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+          className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
         >
           <option value="">Pilih jenis izin</option>
           {LEAVE_TYPES.map((t) => (
@@ -225,43 +232,48 @@ export default function LeaveRequestForm({ student }: Props) {
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="text-sm font-medium block mb-1">
+          <label htmlFor="start-date" className="text-sm font-medium block mb-1">
             Tanggal Mulai
           </label>
           <input
+            id="start-date"
             type="date"
             min={today}
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+            className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
           />
         </div>
         <div>
-          <label className="text-sm font-medium block mb-1">
+          <label htmlFor="end-date" className="text-sm font-medium block mb-1">
             Tanggal Selesai
           </label>
           <input
+            id="end-date"
             type="date"
             min={startDate || today}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+            className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
           />
         </div>
       </div>
 
       <div>
-        <label className="text-sm font-medium block mb-1">
-          Catatan (opsional, maks 500 karakter)
+        <label htmlFor="reason" className="text-sm font-medium block mb-1">
+          Catatan{" "}
+          <span className="font-normal text-neutral-medium">(opsional)</span>
         </label>
         <textarea
+          id="reason"
           value={reason}
           maxLength={500}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
-          className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+          placeholder="Keterangan tambahan bila perlu"
+          className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
         />
       </div>
 
@@ -353,14 +365,14 @@ export default function LeaveRequestForm({ student }: Props) {
         <SelfieCapture onCapture={setSelfie} />
       </div>
 
-      <label className="flex items-start gap-2 text-xs text-neutral-dark bg-neutral-light rounded-md p-3 cursor-pointer">
+      <label className="flex items-start gap-3 text-xs text-neutral-dark bg-neutral-light rounded-md p-4 cursor-pointer">
         <input
           type="checkbox"
           checked={agreedToStatement}
           onChange={(e) => setAgreedToStatement(e.target.checked)}
-          className="mt-0.5"
+          className="mt-0.5 flex-none w-5 h-5"
         />
-        <span>
+        <span className="leading-relaxed">
           Saya menyatakan dengan sebenar-benarnya bahwa anak saya tersebut di
           atas berhalangan mengikuti kegiatan belajar sekolah dikarenakan
           alasan tersebut. Data yang diisikan adalah sah dan dapat
@@ -368,12 +380,16 @@ export default function LeaveRequestForm({ student }: Props) {
         </span>
       </label>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && (
+        <p className="text-sm text-danger bg-danger/5 border border-danger/20 rounded-md px-3 py-2.5">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"
         disabled={submitting || !isFormComplete}
-        className="bg-primary text-white rounded-md py-2.5 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        className="bg-primary text-white rounded-md py-3.5 text-base font-medium hover:bg-neutral-dark active:bg-neutral-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {submitting ? "Mengirim..." : "Kirim Pengajuan"}
       </button>

@@ -26,3 +26,40 @@
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-poppins), sans-serif;
 }
+
+/* ---------- Optimasi untuk browser HP ---------- */
+
+/* iOS Safari memperbesar halaman otomatis saat fokus ke input ber-font < 16px.
+   Menetapkan 16px mencegah zoom paksa yang membuat form terasa "melompat". */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* Target sentuh minimal 44px (pedoman Apple HIG / Material). */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea,
+button {
+  min-height: 44px;
+}
+
+textarea {
+  min-height: 88px;
+}
+
+/* Hilangkan kotak highlight biru bawaan saat elemen disentuh di Android. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Cegah bounce/scroll-chaining yang membingungkan di dalam form panjang. */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Checkbox lebih besar dan mudah disentuh, warna mengikuti tema. */
+input[type="checkbox"] {
+  accent-color: var(--color-secondary);
+}

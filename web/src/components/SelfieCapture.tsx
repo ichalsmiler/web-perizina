@@ -14,12 +14,21 @@ export default function SelfieCapture({ onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [status, setStatus] = useState<"idle" | "streaming" | "denied" | "captured">(
-    "idle"
-  );
+  const [status, setStatus] = useState<
+    "idle" | "starting" | "streaming" | "denied" | "insecure" | "captured"
+  >("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   async function startCamera() {
+    // Browser HP hanya mengizinkan kamera di HTTPS (atau localhost). Bila
+    // aplikasi dibuka lewat http://<ip>:3000, navigator.mediaDevices bahkan
+    // tidak tersedia — tampilkan penyebab sebenarnya, bukan "izin ditolak".
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setStatus("insecure");
+      return;
+    }
+
+    setStatus("starting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
@@ -79,29 +88,70 @@ export default function SelfieCapture({ onCapture }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      {status === "idle" && (
+      {(status === "idle" || status === "starting") && (
         <button
           type="button"
           onClick={startCamera}
-          className="border border-secondary text-secondary rounded-md py-2 text-sm font-medium hover:bg-secondary hover:text-white transition-colors"
+          disabled={status === "starting"}
+          className="flex items-center justify-center gap-2 border-2 border-secondary text-secondary rounded-md py-3.5 text-base font-medium hover:bg-secondary hover:text-white active:bg-secondary active:text-white transition-colors disabled:opacity-60"
         >
-          Aktifkan Kamera untuk Selfie
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+          {status === "starting"
+            ? "Membuka kamera..."
+            : "Aktifkan Kamera untuk Selfie"}
         </button>
       )}
 
       {status === "denied" && (
-        <p className="text-sm text-danger">
-          Akses kamera ditolak. Mohon izinkan akses kamera pada browser Anda
-          untuk melanjutkan pengajuan (selfie wajib diambil langsung, tidak
-          bisa unggah dari galeri).
-        </p>
+        <div className="text-sm bg-danger/5 border border-danger/20 rounded-md p-4 flex flex-col gap-3">
+          <p className="text-danger font-medium">Kamera belum bisa diakses.</p>
+          <p className="text-neutral-dark leading-relaxed">
+            Ketuk ikon gembok/kamera di bilah alamat browser, pilih{" "}
+            <strong>Izinkan kamera</strong>, lalu coba lagi. Selfie wajib
+            diambil langsung dan tidak bisa diunggah dari galeri.
+          </p>
+          <button
+            type="button"
+            onClick={startCamera}
+            className="self-start min-h-[44px] px-4 border border-secondary text-secondary rounded-md text-sm font-medium"
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
+
+      {status === "insecure" && (
+        <div className="text-sm bg-warning/5 border border-warning/30 rounded-md p-4 flex flex-col gap-2">
+          <p className="text-neutral-dark font-medium">
+            Kamera tidak tersedia pada koneksi ini.
+          </p>
+          <p className="text-neutral-dark leading-relaxed">
+            Browser HP hanya mengizinkan kamera bila alamatnya memakai{" "}
+            <strong>https://</strong>. Mohon hubungi admin sekolah agar aplikasi
+            diakses lewat alamat aman.
+          </p>
+        </div>
       )}
 
       <video
         ref={videoRef}
-        className={`w-full rounded-md bg-neutral-dark ${
+        className={`w-full aspect-[3/4] sm:aspect-video object-cover rounded-md bg-neutral-dark ${
           status === "streaming" ? "block" : "hidden"
         }`}
+        style={{ transform: "scaleX(-1)" }}
         playsInline
         muted
       />
@@ -109,7 +159,7 @@ export default function SelfieCapture({ onCapture }: Props) {
         <button
           type="button"
           onClick={capture}
-          className="bg-secondary text-white rounded-md py-2 text-sm font-medium hover:bg-primary transition-colors"
+          className="bg-secondary text-white rounded-md py-3.5 text-base font-medium hover:bg-primary active:bg-primary transition-colors"
         >
           Ambil Foto
         </button>
@@ -122,11 +172,12 @@ export default function SelfieCapture({ onCapture }: Props) {
             src={previewUrl}
             alt="Pratinjau selfie verifikasi"
             className="w-full rounded-md"
+            style={{ transform: "scaleX(-1)" }}
           />
           <button
             type="button"
             onClick={retake}
-            className="text-sm text-secondary hover:underline self-start"
+            className="self-start min-h-[44px] px-4 text-sm font-medium text-secondary hover:underline"
           >
             Ambil ulang
           </button>

@@ -79,7 +79,7 @@ function TrackForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="text-center mb-8">
+      <div className="text-center mb-6 sm:mb-8">
         <h1 className="text-2xl font-semibold text-primary">
           Lacak Status Pengajuan
         </h1>
@@ -90,7 +90,7 @@ function TrackForm() {
 
       <form
         onSubmit={handleTrack}
-        className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-3"
+        className="bg-white rounded-lg shadow-sm p-5 sm:p-6 flex flex-col gap-3"
       >
         <label htmlFor="ticketCode" className="text-sm font-medium">
           Kode Tiket
@@ -98,48 +98,59 @@ function TrackForm() {
         <input
           id="ticketCode"
           type="text"
+          inputMode="text"
+          enterKeyHint="search"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
           value={ticketCode}
           onChange={(e) => setTicketCode(e.target.value)}
           placeholder="Contoh: IZS-7K3PQR2X"
-          className="border border-neutral-medium rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-secondary"
+          className="border border-neutral-medium rounded-md px-3 py-2.5 font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-secondary"
         />
         <button
           type="submit"
           disabled={loading}
-          className="bg-primary text-white rounded-md py-2 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60"
+          className="bg-primary text-white rounded-md py-3 text-base font-medium hover:bg-neutral-dark active:bg-neutral-dark transition-colors disabled:opacity-60"
         >
           {loading ? "Mencari..." : "Cek Status"}
         </button>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && (
+          <p className="text-sm text-danger bg-danger/5 border border-danger/20 rounded-md px-3 py-2.5">
+            {error}
+          </p>
+        )}
       </form>
 
       {result && (
-        <div className="mt-4 bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-semibold">{result.studentName}</p>
+        <div className="mt-4 bg-white rounded-lg shadow-sm p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <p className="font-semibold min-w-0 truncate">
+              {result.studentName}
+            </p>
             <span
-              className={`text-xs px-2 py-1 rounded-full font-medium ${statusBadgeClass(
+              className={`flex-none text-xs px-2.5 py-1 rounded-full font-medium ${statusBadgeClass(
                 result.status
               )}`}
             >
               {STATUS_LABELS[result.status]}
             </span>
           </div>
-          <dl className="text-sm space-y-2">
-            <div className="flex justify-between">
-              <dt className="text-neutral-medium">Jenis Izin</dt>
-              <dd>{leaveTypeLabel(result.leaveType)}</dd>
+          <dl className="text-sm space-y-3">
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-medium flex-none">Jenis Izin</dt>
+              <dd className="text-right">{leaveTypeLabel(result.leaveType)}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-neutral-medium">Tanggal</dt>
-              <dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-medium flex-none">Tanggal</dt>
+              <dd className="text-right">
                 {formatDate(result.startDate)} &ndash;{" "}
                 {formatDate(result.endDate)}
               </dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-neutral-medium">Diajukan</dt>
-              <dd>{formatDate(result.submittedAt)}</dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-medium flex-none">Diajukan</dt>
+              <dd className="text-right">{formatDate(result.submittedAt)}</dd>
             </div>
           </dl>
           {result.status === "REJECTED" && result.rejectionReason && (
@@ -153,8 +164,11 @@ function TrackForm() {
         </div>
       )}
 
-      <div className="text-center mt-6">
-        <Link href="/" className="text-sm text-secondary hover:underline">
+      <div className="text-center mt-5">
+        <Link
+          href="/"
+          className="inline-flex items-center justify-center min-h-[44px] px-4 text-sm text-secondary hover:underline"
+        >
           &larr; Kembali ke pencarian siswa
         </Link>
       </div>
@@ -164,7 +178,7 @@ function TrackForm() {
 
 export default function LacakPage() {
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+    <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       <Suspense>
         <TrackForm />
       </Suspense>

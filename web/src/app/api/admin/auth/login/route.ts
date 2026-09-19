@@ -34,10 +34,18 @@ export async function POST(request: NextRequest) {
     user: { id: admin.id, name: admin.fullName },
   });
 
+  // Cookie `Secure` hanya boleh aktif saat koneksi benar-benar HTTPS.
+  // Tanpa pengecekan ini, deployment HTTP di LAN (mis. http://192.168.x.x:3000)
+  // membuat browser membuang cookie sesi sehingga admin terus dilempar ke halaman login.
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttps = forwardedProto
+    ? forwardedProto.split(",")[0].trim() === "https"
+    : request.nextUrl.protocol === "https:";
+
   response.cookies.set(ADMIN_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     path: "/",
     maxAge: 60 * 60, // 1 hour
   });

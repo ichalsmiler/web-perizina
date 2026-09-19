@@ -88,12 +88,38 @@ tar -czf izinsiswa-backup-$(date +%F).tar.gz -C /opt izinsiswa/web/prisma/dev.db
 
 (Adjust the path if you cloned somewhere other than `/opt/izinsiswa`.)
 
-## 7. Exposing it beyond your LAN (optional)
+## 7. HTTPS on a LAN (required for the selfie camera)
 
-By default the app listens on port 3000 on the Ubuntu host. To serve it over HTTPS
-with a real domain, put it behind a reverse proxy such as Nginx or Caddy and obtain
-a certificate (e.g. via Let's Encrypt / certbot). This is optional and independent
-of the steps above — the app itself has no built-in HTTPS.
+Browsers only expose the camera (`getUserMedia`) in a **secure context** — HTTPS or
+localhost. Over plain `http://<lan-ip>:3000` the selfie step can never work, no
+matter how many times the user grants permission.
+
+For a school LAN with no public domain, use the bundled script. It installs Nginx
+as a TLS reverse proxy with a self-signed certificate and binds the app to
+localhost so HTTPS cannot be bypassed:
+
+```bash
+sudo bash setup-https.sh
+# if the LAN IP is not auto-detected:
+SERVER_IP=172.16.32.209 sudo -E bash setup-https.sh
+```
+
+Afterwards:
+
+- `https://<server-ip>` — parents
+- `https://<server-ip>/admin/login` — admin
+- `http://<server-ip>` redirects to HTTPS automatically
+- port 3000 is no longer reachable from the network (Nginx proxies to it)
+
+On first visit each device shows a certificate warning (expected for a
+self-signed certificate): choose **Advanced → Proceed**. The warning does not
+reappear on that device afterwards.
+
+The script is idempotent — re-running it reuses a valid certificate and only
+regenerates one when it expires or the server IP changes.
+
+With a real public domain, use Let's Encrypt / certbot instead of the
+self-signed certificate.
 
 ## 8. Moving from SQLite to PostgreSQL (recommended for real production use)
 

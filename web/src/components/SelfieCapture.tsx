@@ -18,6 +18,10 @@ export default function SelfieCapture({ onCapture }: Props) {
     "idle" | "starting" | "streaming" | "denied" | "insecure" | "captured"
   >("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Bypass untuk testing di HTTP (non-secure context) — hanya di development.
+  const isInsecureContext =
+    typeof window !== "undefined" && !window.isSecureContext;
+  const allowFileFallback = isInsecureContext;
 
   async function startCamera() {
     // Browser HP hanya mengizinkan kamera di HTTPS (atau localhost). Bila
@@ -143,6 +147,32 @@ export default function SelfieCapture({ onCapture }: Props) {
             <strong>https://</strong>. Mohon hubungi admin sekolah agar aplikasi
             diakses lewat alamat aman.
           </p>
+        </div>
+      )}
+
+      {allowFileFallback && status !== "captured" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 flex flex-col gap-3">
+          <p className="text-sm font-medium text-amber-800">
+            Mode pengujian (HTTP): selfie wajib tapi kamera diblokir browser.
+          </p>
+          <p className="text-sm text-amber-700">
+            Sebagai gantinya, silakan unggah foto selfie dari galeri:
+          </p>
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            capture="environment"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const preview = URL.createObjectURL(file);
+                setPreviewUrl(preview);
+                onCapture(file);
+                setStatus("captured");
+              }
+            }}
+            className="border border-amber-300 rounded-md px-3 py-2.5"
+          />
         </div>
       )}
 

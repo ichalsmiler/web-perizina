@@ -21,9 +21,10 @@ export default function SelfieCapture({ onCapture }: Props) {
   // Bypass untuk testing di HTTP (non-secure context) — hanya di development.
   const isInsecureContext =
     typeof window !== "undefined" && !window.isSecureContext;
-  const allowFileFallback = isInsecureContext;
+  const [cameraAttempted, setCameraAttempted] = useState(false);
 
   async function startCamera() {
+    setCameraAttempted(true);
     // Browser HP hanya mengizinkan kamera di HTTPS (atau localhost). Bila
     // aplikasi dibuka lewat http://<ip>:3000, navigator.mediaDevices bahkan
     // tidak tersedia — tampilkan penyebab sebenarnya, bukan "izin ditolak".
@@ -150,7 +151,7 @@ export default function SelfieCapture({ onCapture }: Props) {
         </div>
       )}
 
-      {allowFileFallback && status !== "captured" && (
+      {isInsecureContext && cameraAttempted && status !== "captured" && (
         <div className="bg-amber-50 border border-amber-200 rounded-md p-4 flex flex-col gap-3">
           <p className="text-sm font-medium text-amber-800">
             Mode pengujian (HTTP): selfie wajib tapi kamera diblokir browser.

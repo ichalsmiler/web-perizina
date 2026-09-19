@@ -1,23 +1,48 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash("smada02", 10);
+  // Kredensial admin TIDAK boleh ditulis di kode: repo ini publik.
+  // Diambil dari environment; kalau tidak diisi, password acak dibuat sekali
+  // dan dicetak ke layar agar tidak ada password default yang bisa ditebak.
+  const adminUsername = process.env.ADMIN_USERNAME?.trim() || "admin";
+  const envPassword = process.env.ADMIN_PASSWORD?.trim();
 
-  await prisma.adminUser.upsert({
-    where: { email: "smada" },
-    update: {
-      passwordHash,
-      fullName: "Admin Sekolah",
-    },
-    create: {
-      email: "smada",
-      passwordHash,
-      fullName: "Admin Sekolah",
-    },
+  const existing = await prisma.adminUser.findUnique({
+    where: { email: adminUsername },
   });
+
+  if (existing && !envPassword) {
+    // Akun sudah ada dan tidak ada permintaan ganti password:
+    // jangan sentuh password — supaya `npm run seed` saat update tidak
+    // mereset password yang sudah diganti admin sekolah.
+    console.log(`Admin "${adminUsername}" sudah ada — password dibiarkan.`);
+  } else {
+    const plainPassword = envPassword || randomBytes(9).toString("base64url");
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    await prisma.adminUser.upsert({
+      where: { email: adminUsername },
+      update: { passwordHash },
+      create: {
+        email: adminUsername,
+        passwordHash,
+        fullName: "Admin Sekolah",
+      },
+    });
+
+    if (envPassword) {
+      console.log(`Password admin "${adminUsername}" diperbarui.`);
+    } else {
+      console.log(
+        `Admin dibuat — username: ${adminUsername} / password: ${plainPassword}`
+      );
+      console.log("Catat password ini sekarang; tidak ditampilkan lagi.");
+    }
+  }
 
   const students = [
     {

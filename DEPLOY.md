@@ -88,13 +88,55 @@ tar -czf izinsiswa-backup-$(date +%F).tar.gz -C /opt izinsiswa/web/prisma/dev.db
 
 (Adjust the path if you cloned somewhere other than `/opt/izinsiswa`.)
 
-## 7. HTTPS on a LAN (required for the selfie camera)
+## 7. HTTP on the school LAN and optional HTTPS
 
-Browsers only expose the camera (`getUserMedia`) in a **secure context** — HTTPS or
-localhost. Over plain `http://<lan-ip>:3000` the selfie step can never work, no
-matter how many times the user grants permission.
+### Current deployment: HTTP only
 
-For a school LAN with no public domain, use the bundled script. It installs Nginx
+HTTPS has been disabled at the administrator's request. Use:
+
+- Parents: `http://172.16.32.209:3000`
+- Admin: `http://172.16.32.209:3000/admin/login`
+
+`izinsiswa.service` runs Next.js with an explicit bind address:
+
+```ini
+ExecStart=/usr/bin/node /opt/izinsiswa/web/node_modules/.bin/next start -H 0.0.0.0
+```
+
+Nginx is stopped and disabled at boot. The IzinSiswa Nginx site and local TLS
+certificate have been removed; ports 80 and 443 are not serving the app.
+The existing `setup-https.sh` remains available but must only be run when HTTPS
+is explicitly wanted again. No database or uploaded files need to change when
+switching protocols.
+
+HTTP does not encrypt passwords, session cookies, or uploaded student/parent
+data. Restrict this deployment to a trusted LAN; do not expose it to the public
+internet. Include `http://` and `:3000` in the address when opening the app.
+
+Browsers block the embedded live camera (`getUserMedia`) over LAN HTTP. The form
+instead immediately shows **Unggah Foto Selfie / Orang Tua**. Select a verification
+photo, complete the required fields, and tick the declaration before submitting.
+A phone may offer its camera through the file picker; that depends on the browser
+and is not the embedded live camera. The verification-photo upload and submission
+flow have been tested through HTTP.
+
+Verification:
+
+```bash
+curl --fail --max-time 10 -o /dev/null -w '%{http_code}\n' http://172.16.32.209:3000/
+sudo systemctl is-active izinsiswa   # active
+sudo systemctl is-active nginx      # inactive (non-zero status is expected)
+sudo systemctl is-enabled nginx     # disabled (non-zero status is expected)
+sudo ss -ltnp                       # app on 0.0.0.0:3000; no listener on 80/443
+```
+
+### Optional: enable HTTPS again
+
+Browsers only expose the embedded camera (`getUserMedia`) in a **secure context**,
+normally trusted HTTPS or localhost. Granting camera permission alone does not
+make a plain LAN HTTP page a secure context.
+
+For a school LAN with no public domain, the bundled script installs Nginx
 as a TLS reverse proxy with a self-signed certificate and binds the app to
 localhost so HTTPS cannot be bypassed:
 
@@ -111,9 +153,12 @@ Afterwards:
 - `http://<server-ip>` redirects to HTTPS automatically
 - port 3000 is no longer reachable from the network (Nginx proxies to it)
 
-On first visit each device shows a certificate warning (expected for a
-self-signed certificate): choose **Advanced → Proceed**. The warning does not
-reappear on that device afterwards.
+A self-signed certificate is not automatically trusted by phones. Certificate
+warnings may recur, and bypassing a warning does not guarantee camera access in
+every browser. For reliable use, configure a local CA trusted by each device or
+use a publicly trusted certificate for a domain. Verify `window.isSecureContext`
+and camera access on the actual phone; a test browser ignoring certificate
+errors is not proof that parents' devices will trust the certificate.
 
 The script is idempotent — re-running it reuses a valid certificate and only
 regenerates one when it expires or the server IP changes.

@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import SelfieCapture from "@/components/SelfieCapture";
-import { LEAVE_TYPES } from "@/lib/constants";
+import {
+  ALLOWED_DOCUMENT_TYPES,
+  LEAVE_TYPES,
+  MAX_DOCUMENT_SIZE_BYTES,
+} from "@/lib/constants";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type Props = {
   student: { id: string; fullName: string };
@@ -22,6 +32,7 @@ export default function LeaveRequestForm({ student }: Props) {
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
   const [document, setDocument] = useState<File | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
   const [agreedToStatement, setAgreedToStatement] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -29,6 +40,32 @@ export default function LeaveRequestForm({ student }: Props) {
   const [result, setResult] = useState<SubmitResult | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
+
+  function handleDocumentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    // Input di-reset agar file yang sama bisa dipilih ulang setelah dihapus.
+    e.target.value = "";
+
+    if (!file) return;
+
+    if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
+      setDocument(null);
+      setDocumentError(
+        "Format file tidak didukung. Gunakan PDF, JPG, atau PNG."
+      );
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+      setDocument(null);
+      setDocumentError(
+        `Ukuran file ${formatFileSize(file.size)} melebihi batas 5MB.`
+      );
+      return;
+    }
+
+    setDocumentError(null);
+    setDocument(file);
+  }
 
   const isWhatsappValid = /^\d{9,12}$/.test(parentWhatsapp);
   const isDateRangeValid = !!startDate && !!endDate && endDate >= startDate;
@@ -230,18 +267,82 @@ export default function LeaveRequestForm({ student }: Props) {
 
       <div>
         <label className="text-sm font-medium block mb-1">
-          Dokumen Pendukung (PDF/JPG/PNG, maks 5MB)
+          Dokumen Pendukung{" "}
+          <span className="font-normal text-neutral-medium">(opsional)</span>
         </label>
-        <input
-          type="file"
-          accept="application/pdf,image/jpeg,image/png"
-          onChange={(e) => setDocument(e.target.files?.[0] ?? null)}
-          className="w-full text-sm"
-        />
-        {document && (
-          <p className="text-xs text-neutral-medium mt-1">
-            Terpilih: {document.name}
-          </p>
+        <p className="text-xs text-neutral-medium mb-2">
+          Contoh: surat keterangan dokter atau surat resmi. Format PDF, JPG,
+          atau PNG — ukuran maksimal 5MB.
+        </p>
+
+        {!document ? (
+          <>
+            <label
+              htmlFor="dokumen-pendukung"
+              className="flex flex-col items-center justify-center gap-2 w-full border-2 border-dashed border-neutral-medium rounded-lg px-4 py-6 cursor-pointer text-center hover:border-secondary hover:bg-neutral-light/50 transition-colors"
+            >
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-secondary"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span className="text-sm font-medium text-primary">
+                Ketuk untuk pilih file
+              </span>
+              <span className="text-xs text-neutral-medium">
+                PDF, JPG, atau PNG · maks 5MB
+              </span>
+            </label>
+            <input
+              id="dokumen-pendukung"
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              onChange={handleDocumentChange}
+              className="sr-only"
+            />
+          </>
+        ) : (
+          <div className="flex items-center gap-3 w-full border border-neutral-medium rounded-lg px-3 py-3 bg-neutral-light/60">
+            <span
+              className="flex-none w-10 h-10 rounded-md bg-white border border-neutral-medium grid place-items-center text-[10px] font-semibold text-primary"
+              aria-hidden="true"
+            >
+              {document.type === "application/pdf" ? "PDF" : "IMG"}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-primary truncate">
+                {document.name}
+              </span>
+              <span className="block text-xs text-neutral-medium">
+                {formatFileSize(document.size)} · siap dikirim
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setDocument(null);
+                setDocumentError(null);
+              }}
+              className="flex-none text-xs font-medium text-danger border border-danger/40 rounded-md px-3 py-2 hover:bg-danger hover:text-white transition-colors"
+            >
+              Hapus
+            </button>
+          </div>
+        )}
+
+        {documentError && (
+          <p className="text-xs text-danger mt-2">{documentError}</p>
         )}
       </div>
 

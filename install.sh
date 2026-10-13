@@ -117,6 +117,8 @@ else
   log ".env sudah ada, tidak diubah"
 fi
 
+chmod 600 "$WEB_DIR/.env"
+
 # --- 6. Install dependencies ---
 log "Menginstall dependencies (npm ci)..."
 npm ci --loglevel=error 2>&1 | tail -3

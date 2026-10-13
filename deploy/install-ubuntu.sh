@@ -59,6 +59,8 @@ else
   echo "    web/.env already exists, leaving it untouched"
 fi
 
+chmod 600 "$WEB_DIR/.env"
+
 echo "==> Installing dependencies"
 cd "$WEB_DIR"
 npm ci

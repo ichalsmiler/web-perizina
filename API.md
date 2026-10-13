@@ -4,13 +4,13 @@ This document outlines the API specifications for the IzinSiswa backend service,
 
 ## Authentication & Authorization
 
-The API uses JSON Web Tokens (JWT) for **Admin authentication only**. Upon successful Admin login, a JWT is issued, which must be included in the `Authorization` header of all subsequent Admin-protected requests.
+The API uses JSON Web Tokens (JWT) for **Admin authentication only**. Successful login sets the `izinsiswa_admin_token` HttpOnly cookie. The browser sends it with subsequent same-origin Admin requests; the token is not returned in JSON or stored in localStorage.
 
 Parent/Guardian users **never authenticate**. All Parent-facing endpoints below are public — access is instead gated by knowledge of a valid student NIS/name (for search and submission) or a valid ticket code (for status tracking). These public endpoints **MUST** be rate-limited to deter scraping/abuse.
 
 *   **Method:** JWT (JSON Web Tokens), Admin endpoints only
-*   **Header Format:** `Authorization: Bearer <your_jwt_token>`
-*   **Token Expiry:** JWTs will have a short expiry time (e.g., 1 hour) and require a refresh mechanism (not detailed in this document, but assumed to be implemented).
+*   **Cookie:** `izinsiswa_admin_token`, HttpOnly, SameSite=Lax, Secure over HTTPS.
+*   **Token Expiry:** 1 hour; log in again after expiry.
 
 ## Standard Response & Pagination Formats
 
@@ -80,7 +80,7 @@ The following are the essential API endpoints for the IzinSiswa application, gro
 
 *   **Method:** `POST`
 *   **Path:** `/admin/auth/login`
-*   **Description:** Authenticates a school Admin and returns a JWT. There is no equivalent login for Parent/Guardian users — they never authenticate.
+*   **Description:** Authenticates a school Admin and sets the session cookie. There is no equivalent login for Parent/Guardian users — they never authenticate.
 *   **Auth Level:** Public
 *   **Request Body (JSON):**
     ```json
@@ -94,7 +94,6 @@ The following are the essential API endpoints for the IzinSiswa application, gro
     {
       "success": true,
       "data": {
-        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
         "user": {
           "id": "admin-uuid-abc",
           "name": "Admin Sekolah"

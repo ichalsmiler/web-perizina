@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
   });
 
   const response = apiSuccess({
-    token,
     user: { id: admin.id, name: admin.fullName },
   });
+  response.headers.set("Cache-Control", "no-store");
 
   // Cookie `Secure` hanya boleh aktif saat koneksi benar-benar HTTPS.
   // Tanpa pengecekan ini, deployment HTTP di LAN (mis. http://192.168.x.x:3000)

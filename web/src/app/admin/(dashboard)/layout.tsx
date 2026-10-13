@@ -25,6 +25,9 @@ export default async function AdminDashboardLayout({
             <Link href="/admin/students" className="text-sm hover:underline">
               Data Siswa
             </Link>
+            <Link href="/admin/reports" className="text-sm hover:underline">
+              Laporan 07.30
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <span className="text-sm text-neutral-light">{session.fullName}</span>

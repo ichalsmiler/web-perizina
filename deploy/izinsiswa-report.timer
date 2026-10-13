@@ -1,0 +1,12 @@
+[Unit]
+Description=Generate IzinSiswa report every day at 07:30 WITA
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Makassar
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=true
+Unit=izinsiswa-report.service
+
+[Install]
+WantedBy=timers.target

@@ -85,7 +85,15 @@ sed \
   -e "s/^Group=.*/Group=$SERVICE_USER/" \
   "$REPO_DIR/deploy/izinsiswa.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
 
+sed \
+  -e "s#/opt/izinsiswa/web#$WEB_DIR#g" \
+  -e "s/^User=.*/User=$SERVICE_USER/" \
+  -e "s/^Group=.*/Group=$SERVICE_USER/" \
+  "$REPO_DIR/deploy/izinsiswa-report.service" > "/etc/systemd/system/izinsiswa-report.service"
+cp "$REPO_DIR/deploy/izinsiswa-report.timer" /etc/systemd/system/izinsiswa-report.timer
+
 systemctl daemon-reload
+systemctl enable --now izinsiswa-report.timer
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 

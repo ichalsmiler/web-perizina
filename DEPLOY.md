@@ -1,5 +1,7 @@
 # Deploy IzinSiswa to Ubuntu (Proxmox VM/LXC)
 
+Laporan otomatis 07.30 WITA dan konfigurasi chat pribadi Telegram: lihat [TELEGRAM_REPORT.md](TELEGRAM_REPORT.md).
+
 This installs the app as a native Node.js systemd service — no Docker required.
 Tested against Ubuntu 22.04/24.04.
 

@@ -51,6 +51,7 @@ export async function PATCH(
       status: status === "Approved" ? "APPROVED" : "REJECTED",
       adminId: session.sub,
       adminNotes: status === "Rejected" ? rejectionReason : null,
+      processedAt: new Date(),
     },
   });
 
@@ -58,6 +59,6 @@ export async function PATCH(
     id: updated.id,
     status: updated.status,
     approvedBy: session.fullName,
-    approvedAt: updated.updatedAt,
+    approvedAt: updated.processedAt,
   });
 }

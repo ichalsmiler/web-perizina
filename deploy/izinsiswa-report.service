@@ -1,0 +1,19 @@
+[Unit]
+Description=IzinSiswa daily approved-leave report and Telegram delivery
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=izinsiswa
+Group=izinsiswa
+WorkingDirectory=/opt/izinsiswa/web
+EnvironmentFile=/opt/izinsiswa/web/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run report:daily
+Restart=on-failure
+RestartSec=60
+NoNewPrivileges=true
+PrivateTmp=true

@@ -164,7 +164,10 @@ PrivateTmp=true
 WantedBy=multi-user.target
 SVCEOF
 
+sed "s#/opt/izinsiswa/web#$WEB_DIR#g" "$INSTALL_DIR/deploy/izinsiswa-report.service" > /etc/systemd/system/izinsiswa-report.service
+cp "$INSTALL_DIR/deploy/izinsiswa-report.timer" /etc/systemd/system/izinsiswa-report.timer
 systemctl daemon-reload
+systemctl enable --now izinsiswa-report.timer
 systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
 systemctl restart "$SERVICE_NAME"
 log "Service '$SERVICE_NAME' diinstall dan dijalankan"

@@ -60,6 +60,7 @@ model LeaveRequest {
   status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
   adminId     String?
   adminNotes  String?
+  processedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -67,4 +68,17 @@ model LeaveRequest {
   admin   AdminUser? @relation("AdminProcessedRequests", fields: [adminId], references: [id])
 
   @@map("leave_requests")
+}
+
+model DailyLeaveReport {
+  id          String   @id @default(uuid())
+  dateKey     String   @unique
+  cutoffAt    DateTime
+  generatedAt DateTime @default(now())
+  content     String
+  telegramStatus String @default("PENDING")
+  telegramSentAt DateTime?
+  telegramMessageId Int?
+
+  @@map("daily_leave_reports")
 }

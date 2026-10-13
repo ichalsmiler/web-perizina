@@ -26,6 +26,10 @@ Buka http://localhost:3000
 
 ## Struktur
 
+Laporan izin harian pukul 07.30 WITA tersedia di `/admin/reports`, dengan arsip Excel
+dan pengiriman opsional ke chat pribadi Telegram. Konfigurasi serta jadwal server
+dijelaskan di [TELEGRAM_REPORT.md](../TELEGRAM_REPORT.md).
+
 - `prisma/schema.prisma` — model `AdminUser`, `Student`, `LeaveRequest` (SQLite untuk lokal; ganti provider ke `postgresql` untuk produksi).
 - `src/lib/storage.ts` — stand-in untuk S3. Ganti isi fungsi ini untuk beralih ke S3 asli.
 - `src/lib/auth.ts` + `src/proxy.ts` — sesi Admin berbasis JWT di cookie httpOnly; melindungi semua rute `/admin/*` dan `/api/admin/*`.

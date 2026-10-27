@@ -361,12 +361,11 @@ if [[ "$WA_ON" == "1" ]]; then
   if [[ "$WA_CONNECTED" == "1" ]] && grep -q '^GROUP_JID=.\+' "$WA_DIR/.env"; then
     echo "  Gateway WA: terhubung, rekap terkirim Senin-Jumat 07.15, 07.45, 08.15 WITA."
   else
-    echo "  Gateway WA belum siap. Langkah sekali saja:"
-    echo "    1. Scan QR dengan nomor WA bot (WhatsApp > Perangkat Tertaut):"
-    echo "         sudo journalctl -u $WA_SERVICE_NAME -f -o cat"
-    echo "    2. Lihat ID grup tujuan (bot harus sudah jadi anggota grup):"
-    echo "         sudo bash -c 'curl -s -H \"X-Api-Key: \$(grep ^API_KEY= $WA_DIR/.env | cut -d= -f2)\" http://127.0.0.1:${WA_PORT:-3001}/groups'"
-    echo "    3. Isi GROUP_JID di $WA_DIR/.env, lalu: sudo systemctl restart $WA_SERVICE_NAME"
+    echo "  Gateway WA belum siap. Langkah sekali saja, dari PC:"
+    echo "    1. Buka tunnel SSH (biarkan jendelanya terbuka):"
+    echo "         ssh -L ${WA_PORT:-3001}:127.0.0.1:${WA_PORT:-3001} $(logname 2>/dev/null || echo root)@$IP_ADDR"
+    echo "    2. Buka http://localhost:${WA_PORT:-3001}/qr di browser PC, scan QR dengan nomor WA bot."
+    echo "    3. Di halaman yang sama, klik 'Jadikan tujuan rekap' pada grup guru."
   fi
 fi
 echo

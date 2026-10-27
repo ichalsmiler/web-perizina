@@ -15,6 +15,7 @@
  * pakai nomor khusus, jangan nomor pribadi.
  */
 // ESM: Baileys 6.7.24 dipublikasikan sebagai paket ESM ("type": "module").
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -38,7 +39,8 @@ const PORT = process.env.PORT || 3001;
 // Hanya dengar di localhost: endpoint /send bisa mengirim pesan WA atas nama bot.
 const HOST = process.env.HOST || '127.0.0.1';
 const API_KEY = process.env.API_KEY || '';
-const GROUP_JID = process.env.GROUP_JID || '';
+// Bisa diganti dari halaman /qr tanpa restart; disimpan juga ke .env.
+let groupJid = process.env.GROUP_JID || '';
 // 3 sesi, jeda 30 menit, Senin-Jumat: 07:15, 07:45, 08:15.
 // Satu ekspresi cron tidak bisa mewakili ketiganya sekaligus, jadi
 // CRON_SCHEDULE boleh berisi beberapa ekspresi yang dipisah ';'.
@@ -172,16 +174,21 @@ async function fetchIzin() {
   }
   const since = getTodayStartISO();
   const url = `${IZIN_API_URL}?since=${encodeURIComponent(since)}`;
-  const res = await fetch(url, {
-    headers: IZIN_API_TOKEN ? { Authorization: `Bearer ${IZIN_API_TOKEN}` } : {},
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: IZIN_API_TOKEN ? { Authorization: `Bearer ${IZIN_API_TOKEN}` } : {},
+    });
+  } catch (e) {
+    throw new Error(`Aplikasi IzinSiswa tidak bisa dihubungi di ${IZIN_API_URL} (${e.cause?.code ?? e.message}).`);
+  }
   if (!res.ok) throw new Error(`Gagal ambil data izin: HTTP ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : (data.izin || []);
 }
 
 async function kirimRekap() {
-  if (!GROUP_JID) throw new Error('GROUP_JID belum diisi di .env');
+  if (!groupJid) throw new Error('Grup tujuan belum dipilih (GROUP_JID kosong).');
   const izin = await fetchIzin();
   if (izin.length === 0 && !SEND_IF_EMPTY) {
     console.log('Tidak ada izin disetujui hari ini, pesan dilewati (SEND_IF_EMPTY=false).');
@@ -190,7 +197,7 @@ async function kirimRekap() {
   }
   await waitConnected();
   const pesan = formatRekap(izin, labelPeriodeSesi());
-  await sock.sendMessage(GROUP_JID, { text: pesan });
+  await sock.sendMessage(groupJid, { text: pesan });
   setLastSent(new Date().toISOString());
   console.log(`Rekap terkirim ke grup: ${izin.length} izin`);
   return { sent: true, count: izin.length };
@@ -211,31 +218,148 @@ function cekApiKey(req, res, next) {
 }
 
 app.get('/status', (req, res) => {
-  res.json({ ok: true, connected, group: GROUP_JID || null, cron: CRON_SCHEDULE, timezone: TIMEZONE });
+  res.json({ ok: true, connected, group: groupJid || null, cron: CRON_SCHEDULE, timezone: TIMEZONE });
 });
 
-// QR sebagai gambar, untuk dibuka di browser lewat tunnel SSH (lihat README).
-// Tanpa API key: gateway hanya dengar di 127.0.0.1, jadi hanya bisa dibuka dari
-// server ini atau lewat tunnel SSH, yang sudah butuh login ke server.
-app.get('/qr', async (req, res) => {
-  const page = (body, refreshSec) => `<!doctype html><html lang="id"><head><meta charset="utf-8">
+// ---------- Halaman pengaturan bot (/qr) ----------
+// Tanpa API key: gateway hanya dengar di 127.0.0.1, jadi halaman ini hanya bisa
+// dibuka dari server ini atau lewat tunnel SSH, yang sudah butuh login ke server.
+// Token formulir mencegah situs lain di browser yang sama mengirim POST ke sini.
+const FORM_TOKEN = crypto.randomBytes(16).toString('hex');
+const ENV_FILE = path.join(__dirname, '.env');
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+function saveGroupJid(jid) {
+  let txt = '';
+  try { txt = fs.readFileSync(ENV_FILE, 'utf8'); } catch { /* .env belum ada */ }
+  txt = /^GROUP_JID=.*$/m.test(txt)
+    ? txt.replace(/^GROUP_JID=.*$/m, `GROUP_JID=${jid}`)
+    : `${txt.replace(/\n?$/, '\n')}GROUP_JID=${jid}\n`;
+  fs.writeFileSync(ENV_FILE, txt, { mode: 0o600 });
+  groupJid = jid;
+}
+
+const PESAN = {
+  grup: 'Grup tujuan rekap disimpan.',
+  terkirim: 'Rekap terkirim ke grup.',
+  kosong: 'Belum ada izin yang diajukan hari ini dan sudah disetujui, jadi tidak ada yang dikirim.',
+};
+
+function page(body, refreshSec) {
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="${refreshSec}"><title>QR bot WhatsApp</title>
-<style>body{font-family:system-ui,sans-serif;background:#ecf0f1;color:#2c3e50;margin:0;padding:24px;text-align:center}
-img{background:#fff;padding:12px;border:1px solid #bdc3c7;width:min(360px,90vw);height:auto}</style></head>
-<body>${body}</body></html>`;
+${refreshSec ? `<meta http-equiv="refresh" content="${refreshSec}">` : ''}<title>Bot WhatsApp IzinSiswa</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#ecf0f1;color:#34495e;margin:0;padding:24px 16px;line-height:1.5}
+main{max-width:640px;margin:0 auto}
+h1,h2{color:#2c3e50;margin:0 0 8px}h2{font-size:1.1rem;margin-top:24px}
+.card{background:#fff;border:1px solid #d5dbdf;border-radius:8px;padding:16px;margin-top:12px}
+.qr{text-align:center}.qr img{width:min(360px,90vw);height:auto}
+.note{color:#5d6d7e;font-size:.9rem}
+.ok{background:#e8f6ee;border:1px solid #1e8449;color:#196f3d;border-radius:4px;padding:10px 12px;margin-top:12px}
+.err{background:#fbedeb;border:1px solid #c0392b;color:#c0392b;border-radius:4px;padding:10px 12px;margin-top:12px}
+ul{list-style:none;margin:0;padding:0}li{padding:12px 0;border-top:1px solid #d5dbdf}li:first-child{border-top:0}
+.name{font-weight:600;color:#2c3e50}.id{font-family:ui-monospace,monospace;font-size:.85rem;word-break:break-all;color:#5d6d7e}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}form{margin:0}
+button{min-height:44px;padding:0 14px;border-radius:4px;font:600 .9rem system-ui,sans-serif;cursor:pointer;border:1px solid #7f8c8d;background:#fff;color:#34495e}
+button.primary{background:#2c3e50;border-color:#2c3e50;color:#fff}
+.tag{display:inline-block;font-size:.8rem;font-weight:600;color:#196f3d;border:1px solid #1e8449;background:#e8f6ee;border-radius:4px;padding:0 6px;margin-left:6px}
+:focus-visible{outline:3px solid #3498db;outline-offset:2px}
+</style></head>
+<body><main>${body}</main>
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var v = b.getAttribute('data-copy');
+    navigator.clipboard.writeText(v).then(function () {
+      b.textContent = 'Tersalin';
+      setTimeout(function () { b.textContent = 'Salin ID'; }, 2000);
+    }, function () { window.prompt('Salin ID grup ini:', v); });
+  });
+});
+</script></body></html>`;
+}
+
+app.get('/', (req, res) => res.redirect('/qr'));
+
+app.get('/qr', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  if (connected) {
-    return res.send(page(`<h1>Bot sudah terhubung</h1><p>${sock?.user?.id ?? ''}</p><p>Halaman ini boleh ditutup.</p>`, 30));
-  }
-  if (!latestQr) {
-    return res.send(page('<h1>Menunggu QR dari WhatsApp...</h1><p>Halaman memuat ulang sendiri.</p>', 3));
-  }
-  const png = await QRCode.toDataURL(latestQr, { margin: 2, width: 360 });
-  res.send(page(`<h1>Scan dengan nomor WA bot</h1>
+  if (!connected) {
+    if (!latestQr) {
+      return res.send(page('<h1>Menunggu QR dari WhatsApp...</h1><p class="note">Halaman memuat ulang sendiri.</p>', 3));
+    }
+    const png = await QRCode.toDataURL(latestQr, { margin: 2, width: 360 });
+    return res.send(page(`<h1>Scan dengan nomor WA bot</h1>
 <p>WhatsApp &gt; Perangkat tertaut &gt; Tautkan perangkat</p>
-<img src="${png}" alt="QR untuk menautkan bot WhatsApp">
-<p>QR diganti otomatis tiap beberapa detik; halaman ini ikut memuat ulang.</p>`, 10));
+<div class="card qr"><img src="${png}" alt="QR untuk menautkan bot WhatsApp"></div>
+<p class="note">QR diganti otomatis tiap beberapa detik; halaman ini ikut memuat ulang.</p>`, 10));
+  }
+
+  const pesan = PESAN[req.query.pesan] ? `<p class="ok" role="status">${PESAN[req.query.pesan]}</p>` : '';
+  const galat = req.query.galat ? `<p class="err" role="alert">${esc(req.query.galat)}</p>` : '';
+
+  let groups = [];
+  let groupError = '';
+  try {
+    groups = Object.values(await sock.groupFetchAllParticipating())
+      .map((g) => ({ id: g.id, subject: g.subject }))
+      .sort((a, b) => a.subject.localeCompare(b.subject, 'id'));
+  } catch (e) {
+    groupError = `<p class="err" role="alert">Daftar grup gagal dimuat: ${esc(e.message)}</p>`;
+  }
+  const current = groups.find((g) => g.id === groupJid);
+
+  const list = groups.length === 0
+    ? '<p class="note">Bot belum menjadi anggota grup mana pun. Masukkan nomor bot ke grup guru, lalu muat ulang halaman ini.</p>'
+    : `<ul>${groups.map((g) => `<li>
+<div class="name">${esc(g.subject)}${g.id === groupJid ? '<span class="tag">Tujuan rekap</span>' : ''}</div>
+<div class="id">${esc(g.id)}</div>
+<div class="row">
+<button type="button" data-copy="${esc(g.id)}">Salin ID</button>
+${g.id === groupJid ? '' : `<form method="post" action="/qr/grup"><input type="hidden" name="token" value="${FORM_TOKEN}">
+<input type="hidden" name="jid" value="${esc(g.id)}"><button class="primary" type="submit">Jadikan tujuan rekap</button></form>`}
+</div></li>`).join('')}</ul>`;
+
+  const tujuan = groupJid
+    ? `<p>Rekap dikirim ke <strong>${esc(current?.subject ?? groupJid)}</strong>.</p>
+<form method="post" action="/qr/kirim"><input type="hidden" name="token" value="${FORM_TOKEN}">
+<button type="submit">Kirim rekap sekarang (tes)</button></form>`
+    : '<p>Grup tujuan belum dipilih. Pilih salah satu grup di bawah.</p>';
+
+  res.send(page(`<h1>Bot WhatsApp terhubung</h1>
+<p class="note">Nomor bot: ${esc(sock?.user?.id ?? '')}</p>${pesan}${galat}
+<div class="card">${tujuan}</div>
+<h2>Grup yang diikuti bot</h2>${groupError}
+<div class="card">${list}</div>
+<p class="note">Jadwal: ${esc(CRON_SCHEDULE)} (${esc(TIMEZONE)}).</p>`));
+});
+
+app.post('/qr/grup', express.urlencoded({ extended: false }), async (req, res) => {
+  if (req.body.token !== FORM_TOKEN) return res.status(403).send('Token formulir salah. Muat ulang halaman /qr.');
+  try {
+    await waitConnected(5000);
+    const groups = await sock.groupFetchAllParticipating();
+    const jid = String(req.body.jid || '');
+    if (!groups[jid]) throw new Error('Grup tidak ditemukan di daftar grup bot.');
+    saveGroupJid(jid);
+    console.log(`Grup tujuan rekap diganti ke ${groups[jid].subject} (${jid})`);
+    res.redirect(303, '/qr?pesan=grup');
+  } catch (e) {
+    res.redirect(303, `/qr?galat=${encodeURIComponent(e.message)}`);
+  }
+});
+
+app.post('/qr/kirim', express.urlencoded({ extended: false }), async (req, res) => {
+  if (req.body.token !== FORM_TOKEN) return res.status(403).send('Token formulir salah. Muat ulang halaman /qr.');
+  try {
+    const hasil = await kirimRekap();
+    res.redirect(303, `/qr?pesan=${hasil.sent ? 'terkirim' : 'kosong'}`);
+  } catch (e) {
+    res.redirect(303, `/qr?galat=${encodeURIComponent(e.message)}`);
+  }
 });
 
 // Lihat daftar grup yang diikuti bot, untuk menemukan GROUP_JID yang benar.
@@ -252,7 +376,7 @@ app.get('/groups', cekApiKey, async (req, res) => {
 app.post('/send', cekApiKey, async (req, res) => {
   try {
     await waitConnected();
-    const to = req.body.to || GROUP_JID;
+    const to = req.body.to || groupJid;
     if (!to || !req.body.message) return res.status(400).json({ ok: false, error: 'to / message wajib diisi' });
     await sock.sendMessage(to, { text: req.body.message });
     res.json({ ok: true });
@@ -295,7 +419,7 @@ if (schedulerAktif) {
 }
 
 if (!API_KEY) console.log('PERINGATAN: API_KEY kosong, endpoint /groups /send /kirim-rekap ditolak.');
-if (!GROUP_JID) console.log('GROUP_JID belum diisi. Setelah scan QR, cari ID grup lewat GET /groups.');
+if (!groupJid) console.log(`Grup tujuan belum dipilih. Setelah scan QR, pilih grup di http://127.0.0.1:${PORT}/qr`);
 
 app.listen(PORT, HOST, () => console.log(`Gateway jalan di http://${HOST}:${PORT}`));
 connect();

@@ -66,25 +66,25 @@ Setelah terpasang:
    sudo journalctl -u izinsiswa-wa -f -o cat
    ```
 
-2. Masukkan nomor bot ke grup guru, lalu lihat ID grupnya:
+2. Masukkan nomor bot ke grup guru. Setelah terhubung, halaman
+   `http://localhost:3001/qr` menampilkan semua grup yang diikuti bot:
+   - **Jadikan tujuan rekap** menyimpan grup itu sebagai `GROUP_JID` di
+     `wa-gateway/.env` dan langsung berlaku, tanpa restart.
+   - **Salin ID** menyalin ID grup (berakhiran `@g.us`).
+   - **Kirim rekap sekarang (tes)** mengirim rekap hari ini ke grup tujuan.
 
-   ```bash
-   sudo bash -c 'curl -s -H "X-Api-Key: $(grep ^API_KEY= /opt/izinsiswa/wa-gateway/.env | cut -d= -f2)" http://127.0.0.1:3001/groups'
-   ```
+   Grup yang baru dimasuki bot muncul setelah halaman dimuat ulang.
 
-3. Salin `id` grup (berakhiran `@g.us`) ke `GROUP_JID` di
-   `/opt/izinsiswa/wa-gateway/.env`, lalu:
-
-   ```bash
-   sudo systemctl restart izinsiswa-wa
-   ```
-
-## Tes kirim di luar jadwal
+## Tanpa browser (lewat terminal server)
 
 ```bash
 curl -s http://127.0.0.1:3001/status
+sudo bash -c 'curl -s -H "X-Api-Key: $(grep ^API_KEY= /opt/izinsiswa/wa-gateway/.env | cut -d= -f2)" http://127.0.0.1:3001/groups'
 sudo bash -c 'curl -s -X POST -H "X-Api-Key: $(grep ^API_KEY= /opt/izinsiswa/wa-gateway/.env | cut -d= -f2)" http://127.0.0.1:3001/kirim-rekap'
 ```
+
+`GROUP_JID` juga bisa diisi manual di `wa-gateway/.env`, lalu
+`sudo systemctl restart izinsiswa-wa`.
 
 ## Mengubah jadwal
 

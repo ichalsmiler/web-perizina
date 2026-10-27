@@ -369,7 +369,21 @@ SVCEOF
     warn "Gateway WA belum merespons (log di atas). Aplikasi utama tetap berjalan."
   else
     ok "Gateway WA berjalan di 127.0.0.1:$WA_PORT"
-    if grep -q '"connected":true' <<<"$STATUS"; then WA_CONNECTED=1; fi
+    wa_ready() {
+      STATUS=$(curl -s -m 3 "http://127.0.0.1:$WA_PORT/status" || true)
+      grep -q '"connected":true' <<<"$STATUS" && grep -q '"group":"' <<<"$STATUS"
+    }
+    # Sesi tersimpan butuh beberapa detik untuk tersambung lagi setelah restart.
+    if [[ -d "$WA_DIR/auth_info_baileys" ]]; then
+      for _ in $(seq 1 10); do wa_ready && break; sleep 2; done
+    fi
+    if wa_ready; then
+      WA_CONNECTED=1
+    elif { : </dev/tty; } 2>/dev/null; then
+      step "Menghubungkan bot WhatsApp (scan QR, lalu pilih grup)"
+      /usr/bin/node "$WA_DIR/setup.js" </dev/tty >/dev/tty || warn "Setup bot WA belum selesai."
+      if wa_ready; then WA_CONNECTED=1; fi
+    fi
   fi
 fi
 rm -f "$LOG_FILE"
@@ -393,14 +407,14 @@ fi
 if [[ -n "$BACKUP_FILE" ]]; then echo "  Backup sebelum update: $BACKUP_FILE"; fi
 if [[ "$WA_ON" == "1" ]]; then
   echo
-  if [[ "$WA_CONNECTED" == "1" ]] && grep -q '^GROUP_JID=.\+' "$WA_DIR/.env"; then
-    echo "  Gateway WA: terhubung. Jadwal rekap diatur di Admin > Pengaturan."
+  if [[ "$WA_CONNECTED" == "1" ]]; then
+    echo "  Gateway WA: terhubung dan grup tujuan sudah dipilih."
+    echo "  Jadwal rekap diatur di Admin > Pengaturan."
   else
-    echo "  Gateway WA belum siap. Langkah sekali saja, dari PC:"
-    echo "    1. Buka tunnel SSH (biarkan jendelanya terbuka):"
-    echo "         ssh -L ${WA_PORT:-3001}:127.0.0.1:${WA_PORT:-3001} $(logname 2>/dev/null || echo root)@$IP_ADDR"
-    echo "    2. Buka http://localhost:${WA_PORT:-3001}/qr di browser PC, scan QR dengan nomor WA bot."
-    echo "    3. Di halaman yang sama, klik 'Jadikan tujuan rekap' pada grup guru."
+    echo "  Gateway WA belum siap (bot belum terhubung atau grup belum dipilih)."
+    echo "  Jalankan di terminal server:  sudo node $WA_DIR/setup.js"
+    echo "  Atau lewat browser PC: ssh -L ${WA_PORT:-3001}:127.0.0.1:${WA_PORT:-3001} $(logname 2>/dev/null || echo root)@$IP_ADDR"
+    echo "  lalu buka http://localhost:${WA_PORT:-3001}/qr"
   fi
 fi
 echo

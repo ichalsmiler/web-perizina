@@ -64,7 +64,8 @@ password during an update, `INSTALL_DIR`, `BRANCH`, `PORT`, `BIND_HOST`.
 `izinsiswa-wa` service. It sends approved leave requests submitted today to one
 WhatsApp group. Days and session times (24-hour, WITA) are set by the admin under
 **Pengaturan**; the default is Monday to Friday at 07:15, 07:45, and 08:15. Setup
-(QR scan, choosing the group) is in [wa-gateway/README.md](wa-gateway/README.md).
+(QR scan, choosing the group) runs interactively in the terminal during install
+when the bot is not ready yet; details in [wa-gateway/README.md](wa-gateway/README.md).
 
 ## 3. Useful commands
 

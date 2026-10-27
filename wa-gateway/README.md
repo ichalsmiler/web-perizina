@@ -43,7 +43,28 @@ Installer akan:
 Update berikutnya (`sudo bash /opt/izinsiswa/install.sh`) otomatis ikut
 memperbarui gateway; `WA_GATEWAY=1` tidak perlu ditulis lagi.
 
-Setelah terpasang:
+Bila bot belum terhubung atau grup belum dipilih, installer langsung
+menjalankan setup di terminal:
+
+1. QR tampil di terminal. Scan dari HP nomor bot (WhatsApp > Perangkat
+   tertaut > Tautkan perangkat). QR digambar persegi bila jendela minimal
+   114 kolom × 57 baris; perbesar jendela atau perkecil font bila perlu,
+   QR digambar ulang otomatis. Ctrl+C melewati langkah ini.
+2. Setelah terhubung, muncul daftar grup bernomor. Ketik nomor grup guru.
+   Bot harus sudah menjadi anggota grup itu (`r` memuat ulang daftar).
+3. Pilih `y` untuk mengirim pesan tes ke grup itu.
+
+Setup yang sama bisa dijalankan kapan saja, mis. untuk ganti grup atau
+setelah bot dilepas dari HP:
+
+```bash
+sudo node /opt/izinsiswa/wa-gateway/setup.js
+```
+
+Kalau bot dilepas dari HP (logout), gateway menghapus sesi lama dan
+menyiapkan QR baru dengan sendirinya.
+
+### Lewat browser (alternatif)
 
 1. Scan QR dengan nomor WA bot (WhatsApp > Perangkat Tertaut > Tautkan Perangkat).
 
@@ -97,8 +118,9 @@ jadi perubahan berlaku paling lambat 1 menit setelah disimpan, tanpa restart.
 `SCHEDULER_ENABLED=false` di `wa-gateway/.env` menghentikan pengiriman
 terjadwal sepenuhnya (perlu restart service), tanpa melepas bot.
 
-## Kalau bot logout
+## Sesi login bot
 
-Hapus `wa-gateway/auth_info_baileys/`, restart service, lalu scan QR lagi.
-Folder itu berisi sesi login bot: jangan dibagikan. Installer ikut
-membackupnya ke `/var/backups/izinsiswa/` setiap update.
+Sesi tersimpan di `wa-gateway/auth_info_baileys/`: jangan dibagikan.
+Installer ikut membackupnya ke `/var/backups/izinsiswa/` setiap update.
+Bila bot dilepas dari HP, gateway menghapus sesi itu sendiri; scan QR baru
+lewat `sudo node /opt/izinsiswa/wa-gateway/setup.js`.

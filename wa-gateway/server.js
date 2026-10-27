@@ -97,9 +97,13 @@ async function connect() {
         ? lastDisconnect.error.output.statusCode
         : 0;
       console.log('Koneksi WA terputus, kode:', code);
-      // Kalau logout (bukan sekadar putus), minta scan ulang, jangan loop.
+      // Logout (perangkat dilepas dari HP): sesi lama tidak berguna lagi.
+      // Hapus lalu sambung ulang supaya QR baru muncul tanpa campur tangan manual.
       if (code === DisconnectReason.loggedOut) {
-        console.log(`Sesi logout. Hapus folder ${AUTH_DIR}, lalu restart service dan scan QR lagi.`);
+        console.log('Sesi logout dari HP. Sesi lama dihapus, QR baru akan muncul untuk scan ulang.');
+        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 2000);
         return;
       }
       clearTimeout(reconnectTimer);
@@ -283,6 +287,25 @@ document.querySelectorAll('[data-copy]').forEach(function (b) {
 }
 
 app.get('/', (req, res) => res.redirect('/qr'));
+
+// Dipakai setup.js (installer) untuk menggambar QR di terminal.
+app.get('/qr.json', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ connected, qr: connected ? null : latestQr, user: connected ? sock?.user?.id ?? null : null });
+});
+
+// Pilih grup tujuan lewat API (dipakai setup.js). Sama dengan tombol di halaman /qr.
+app.post('/group', cekApiKey, async (req, res) => {
+  try {
+    await waitConnected(5000);
+    const groups = await sock.groupFetchAllParticipating();
+    const jid = String(req.body.jid || '');
+    if (!groups[jid]) return res.status(400).json({ ok: false, error: 'Grup tidak ditemukan di daftar grup bot.' });
+    saveGroupJid(jid);
+    console.log(`Grup tujuan rekap diganti ke ${groups[jid].subject} (${jid})`);
+    res.json({ ok: true, group: { id: jid, subject: groups[jid].subject } });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 app.get('/qr', async (req, res) => {
   res.set('Cache-Control', 'no-store');

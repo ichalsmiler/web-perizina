@@ -1,7 +1,8 @@
 # Rekap izin ke grup WhatsApp
 
-Gateway kecil (Baileys) yang mengirim rekap izin ke satu grup WA guru,
-Senin sampai Jumat pukul 07.15, 07.45, dan 08.15 WITA.
+Gateway kecil (Baileys) yang mengirim rekap izin ke satu grup WA guru.
+Hari dan jam sesinya diatur admin di aplikasi, menu **Pengaturan**
+(bawaan: Senin sampai Jumat pukul 07.15, 07.45, dan 08.15 WITA).
 
 Isi rekap: izin yang **diajukan hari ini** (sejak 00.00 WITA) dan **sudah
 disetujui admin**. Daftarnya kumulatif: sesi 07.45 memuat ulang sesi 07.15
@@ -9,7 +10,7 @@ ditambah izin yang disetujui sesudahnya. Hari berikutnya mulai dari nol.
 
 ```
 📋 Rekap Izin — Senin, 2 November 2026
-Sesi 07:45 WITA — Daftar izin pagi ini s/d 07:45 WITA
+Sesi 07.45 WITA — Daftar izin hari ini s/d 07.45 WITA
 
 1. Ahmad Fauzi - 11 IPS 2 - Sakit
 2. Siti Nurhaliza - 9 A - Izin
@@ -88,9 +89,13 @@ sudo bash -c 'curl -s -X POST -H "X-Api-Key: $(grep ^API_KEY= /opt/izinsiswa/wa-
 
 ## Mengubah jadwal
 
-Ubah `CRON_SCHEDULE` di `wa-gateway/.env` (beberapa jadwal dipisah `;`,
-format `menit jam * * hari`), lalu restart service. `SCHEDULER_ENABLED=false`
-menghentikan pengiriman terjadwal tanpa melepas bot.
+Buka aplikasi sebagai admin, menu **Pengaturan**. Di sana bisa diatur:
+rekap otomatis aktif atau tidak, hari kirim, dan jam setiap sesi (format
+24 jam, WITA, maksimal 10 sesi). Gateway membaca jadwal itu setiap menit,
+jadi perubahan berlaku paling lambat 1 menit setelah disimpan, tanpa restart.
+
+`SCHEDULER_ENABLED=false` di `wa-gateway/.env` menghentikan pengiriman
+terjadwal sepenuhnya (perlu restart service), tanpa melepas bot.
 
 ## Kalau bot logout
 

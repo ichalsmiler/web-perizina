@@ -359,7 +359,7 @@ if [[ -n "$BACKUP_FILE" ]]; then echo "  Backup sebelum update: $BACKUP_FILE"; f
 if [[ "$WA_ON" == "1" ]]; then
   echo
   if [[ "$WA_CONNECTED" == "1" ]] && grep -q '^GROUP_JID=.\+' "$WA_DIR/.env"; then
-    echo "  Gateway WA: terhubung, rekap terkirim Senin-Jumat 07.15, 07.45, 08.15 WITA."
+    echo "  Gateway WA: terhubung. Jadwal rekap diatur di Admin > Pengaturan."
   else
     echo "  Gateway WA belum siap. Langkah sekali saja, dari PC:"
     echo "    1. Buka tunnel SSH (biarkan jendelanya terbuka):"

@@ -41,14 +41,13 @@ const HOST = process.env.HOST || '127.0.0.1';
 const API_KEY = process.env.API_KEY || '';
 // Bisa diganti dari halaman /qr tanpa restart; disimpan juga ke .env.
 let groupJid = process.env.GROUP_JID || '';
-// 3 sesi, jeda 30 menit, Senin-Jumat: 07:15, 07:45, 08:15.
-// Satu ekspresi cron tidak bisa mewakili ketiganya sekaligus, jadi
-// CRON_SCHEDULE boleh berisi beberapa ekspresi yang dipisah ';'.
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '15 7 * * 1-5;45 7 * * 1-5;15 8 * * 1-5';
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Makassar';
 const SEND_IF_EMPTY = String(process.env.SEND_IF_EMPTY || 'false') === 'true';
 const IZIN_API_URL = process.env.IZIN_API_URL || '';
 const IZIN_API_TOKEN = process.env.IZIN_API_TOKEN || '';
+// Jadwal (hari + jam sesi) diatur admin di halaman Pengaturan aplikasi.
+const IZIN_JADWAL_URL = process.env.IZIN_JADWAL_URL
+  || IZIN_API_URL.replace(/wa-rekap\/?$/, 'wa-jadwal');
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const LAST_SENT_FILE = path.join(__dirname, 'last_sent.json');
 
@@ -154,11 +153,11 @@ function getTodayStartISO() {
   return `${tgl}T00:00:00+08:00`;
 }
 
-// Label periode per sesi, kumulatif pagi ini.
-// Contoh: "Sesi 07:45 WITA — Daftar izin pagi ini s/d 07:45 WITA"
+// Label periode per sesi, kumulatif sejak 00:00 hari ini (sesi bisa siang hari).
+// Contoh: "Sesi 07.45 WITA — Daftar izin hari ini s/d 07.45 WITA"
 function labelPeriodeSesi() {
-  const sesi = new Date().toLocaleTimeString('id-ID', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit' });
-  return `Sesi ${sesi} WITA — Daftar izin pagi ini s/d ${sesi} WITA`;
+  const sesi = new Date().toLocaleTimeString('id-ID', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return `Sesi ${sesi} WITA — Daftar izin hari ini s/d ${sesi} WITA`;
 }
 
 function setLastSent(iso) {
@@ -218,7 +217,7 @@ function cekApiKey(req, res, next) {
 }
 
 app.get('/status', (req, res) => {
-  res.json({ ok: true, connected, group: groupJid || null, cron: CRON_SCHEDULE, timezone: TIMEZONE });
+  res.json({ ok: true, connected, group: groupJid || null, jadwal, timezone: TIMEZONE });
 });
 
 // ---------- Halaman pengaturan bot (/qr) ----------
@@ -334,7 +333,7 @@ ${g.id === groupJid ? '' : `<form method="post" action="/qr/grup"><input type="h
 <div class="card">${tujuan}</div>
 <h2>Grup yang diikuti bot</h2>${groupError}
 <div class="card">${list}</div>
-<p class="note">Jadwal: ${esc(CRON_SCHEDULE)} (${esc(TIMEZONE)}).</p>`));
+<p class="note">Jadwal: ${esc(describeJadwal(jadwal))}. Ubah di aplikasi: Admin &gt; Pengaturan.</p>`));
 });
 
 app.post('/qr/grup', express.urlencoded({ extended: false }), async (req, res) => {
@@ -392,30 +391,76 @@ app.post('/kirim-rekap', cekApiKey, async (req, res) => {
 });
 
 // ---------- Scheduler ----------
-// SCHEDULER_ENABLED=false mematikan pengiriman terjadwal (mis. saat masa uji).
+// Tiap menit: baca jadwal dari aplikasi, lalu kirim bila hari dan jam (WITA)
+// cocok dengan salah satu sesi. Perubahan di halaman Pengaturan berlaku
+// paling lambat 1 menit kemudian, tanpa restart.
+// SCHEDULER_ENABLED=false di .env mematikan pengiriman terjadwal sepenuhnya.
 const SCHEDULER_ENABLED = String(process.env.SCHEDULER_ENABLED || 'true') !== 'false';
-const CRON_LIST = SCHEDULER_ENABLED
-  ? CRON_SCHEDULE.split(';').map((s) => s.trim()).filter(Boolean)
-  : [];
-let schedulerAktif = false;
-for (const expr of CRON_LIST) {
-  if (!cron.validate(expr)) {
-    console.log(`CRON tidak valid, dilewati: ${expr}`);
-    continue;
-  }
-  cron.schedule(expr, async () => {
-    console.log('Jadwal rekap jalan:', new Date().toLocaleString('id-ID', { timeZone: TIMEZONE }));
-    try { await kirimRekap(); }
-    catch (e) { console.error('Gagal kirim rekap terjadwal:', e.message); }
-  }, { timezone: TIMEZONE });
-  schedulerAktif = true;
+const NAMA_HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+let jadwal = null; // jadwal terakhir yang berhasil dibaca
+let jadwalError = '';
+let lastFired = '';
+
+function describeJadwal(j) {
+  if (!SCHEDULER_ENABLED) return 'pengiriman terjadwal dimatikan (SCHEDULER_ENABLED=false)';
+  if (!j) return 'belum terbaca dari aplikasi';
+  if (!j.enabled) return 'rekap otomatis dimatikan di aplikasi';
+  const hari = [1, 2, 3, 4, 5, 6, 0].filter((d) => j.days.includes(d)).map((d) => NAMA_HARI[d]).join(', ');
+  return `${hari} pukul ${j.times.join(', ')} WITA`;
 }
-if (schedulerAktif) {
-  console.log(`Scheduler aktif: ${CRON_LIST.join(' | ')} (${TIMEZONE})`);
-} else if (!SCHEDULER_ENABLED) {
-  console.log('Scheduler dimatikan (SCHEDULER_ENABLED=false). Rekap hanya terkirim lewat POST /kirim-rekap.');
+
+// Hari, tanggal, dan jam sekarang dalam TIMEZONE, format 24 jam.
+function nowInZone() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday);
+  return { day, date: `${p.year}-${p.month}-${p.day}`, hhmm: `${p.hour}:${p.minute}` };
+}
+
+async function fetchJadwal() {
+  if (!IZIN_JADWAL_URL) throw new Error('IZIN_API_URL belum diisi di .env');
+  const res = await fetch(IZIN_JADWAL_URL, {
+    headers: IZIN_API_TOKEN ? { Authorization: `Bearer ${IZIN_API_TOKEN}` } : {},
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const j = await res.json();
+  if (typeof j.enabled !== 'boolean' || !Array.isArray(j.days) || !Array.isArray(j.times)) {
+    throw new Error('format jadwal tidak dikenal');
+  }
+  return j;
+}
+
+async function tick() {
+  const now = nowInZone(); // dihitung sebelum fetch agar tidak bergeser menit
+  try {
+    const baru = await fetchJadwal();
+    if (JSON.stringify(baru) !== JSON.stringify(jadwal)) console.log('Jadwal rekap:', describeJadwal(baru));
+    jadwal = baru;
+    jadwalError = '';
+  } catch (e) {
+    const msg = `Gagal membaca jadwal dari ${IZIN_JADWAL_URL}: ${e.cause?.code ?? e.message}`;
+    if (msg !== jadwalError) console.error(`${msg}${jadwal ? ' (memakai jadwal terakhir)' : ''}`);
+    jadwalError = msg;
+  }
+  if (!jadwal?.enabled || !jadwal.days.includes(now.day) || !jadwal.times.includes(now.hhmm)) return;
+
+  const key = `${now.date} ${now.hhmm}`;
+  if (key === lastFired) return;
+  lastFired = key;
+  console.log(`Sesi rekap ${now.hhmm} WITA jalan`);
+  try { await kirimRekap(); }
+  catch (e) { console.error('Gagal kirim rekap terjadwal:', e.message); }
+}
+
+if (SCHEDULER_ENABLED) {
+  cron.schedule('* * * * *', tick, { timezone: TIMEZONE });
+  tick();
 } else {
-  console.log('Tidak ada CRON yang valid, scheduler dimatikan. Cek .env.');
+  console.log('Scheduler dimatikan (SCHEDULER_ENABLED=false). Rekap hanya terkirim lewat tombol tes / POST /kirim-rekap.');
 }
 
 if (!API_KEY) console.log('PERINGATAN: API_KEY kosong, endpoint /groups /send /kirim-rekap ditolak.');

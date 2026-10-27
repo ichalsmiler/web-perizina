@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 import { leaveTypeLabel } from "@/lib/constants";
+import { checkWaGatewayToken } from "@/lib/integrationAuth";
 
 // Dipanggil gateway WA (wa-gateway/server.js) untuk rekap pagi ke grup guru.
 // Isi: izin yang DIAJUKAN sejak `since` (gateway mengirim awal hari ini, WITA)
 // dan sudah DISETUJUI admin. Format respons mengikuti fetchIzin() di gateway.
-
-function tokenValid(header: string | null, expected: string): boolean {
-  const given = header?.startsWith("Bearer ") ? header.slice(7) : "";
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 function startOfTodayWita(): Date {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
@@ -21,13 +14,8 @@ function startOfTodayWita(): Date {
 }
 
 export async function GET(request: NextRequest) {
-  const expected = process.env.WA_REKAP_TOKEN;
-  if (!expected) {
-    return apiError("INTEGRATION_001", "Rekap WA belum diaktifkan (WA_REKAP_TOKEN kosong).", 503);
-  }
-  if (!tokenValid(request.headers.get("authorization"), expected)) {
-    return apiError("AUTH_002", "Unauthorized.", 401);
-  }
+  const denied = checkWaGatewayToken(request.headers.get("authorization"));
+  if (denied) return denied;
 
   const sinceParam = request.nextUrl.searchParams.get("since");
   const since = sinceParam ? new Date(sinceParam) : startOfTodayWita();

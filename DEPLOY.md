@@ -62,8 +62,9 @@ password during an update, `INSTALL_DIR`, `BRANCH`, `PORT`, `BIND_HOST`.
 
 `sudo WA_GATEWAY=1 bash install.sh` also installs `wa-gateway/` as the
 `izinsiswa-wa` service. It sends approved leave requests submitted today to one
-WhatsApp group, Monday to Friday at 07:15, 07:45, and 08:15 WITA. Setup (QR scan,
-group ID) is in [wa-gateway/README.md](wa-gateway/README.md).
+WhatsApp group. Days and session times (24-hour, WITA) are set by the admin under
+**Pengaturan**; the default is Monday to Friday at 07:15, 07:45, and 08:15. Setup
+(QR scan, choosing the group) is in [wa-gateway/README.md](wa-gateway/README.md).
 
 ## 3. Useful commands
 

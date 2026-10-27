@@ -68,3 +68,13 @@ model LeaveRequest {
 
   @@map("leave_requests")
 }
+
+// Pengaturan aplikasi sebagai pasangan kunci-nilai (nilai berupa JSON).
+// Kunci "waSchedule": jadwal rekap izin ke grup WhatsApp.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}

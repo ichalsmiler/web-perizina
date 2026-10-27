@@ -1,146 +1,219 @@
 #!/usr/bin/env bash
 # ============================================================
-#  IzinSiswa — One-Command Installer untuk Ubuntu Server
+#  IzinSiswa: installer satu file untuk Ubuntu 22.04 / 24.04
 # ============================================================
 #
-#  Jalankan di Ubuntu 22.04 / 24.04 dengan satu perintah:
-#
-#    curl -sL https://raw.githubusercontent.com/ichalsmiler/web-perizina/main/install.sh | sudo bash
-#
-#  Atau kalau sudah clone repo:
+#  Server baru: salin file ini saja ke server, lalu jalankan
 #
 #    sudo bash install.sh
 #
-#  Apa yang dilakukan script ini:
-#    1. Install Node.js 22.x (kalau belum ada)
-#    2. Clone repo (kalau belum ada)
-#    3. Install dependencies + build
-#    4. Setup database (SQLite) + seed admin
-#    5. Pasang sebagai systemd service (auto-start saat boot)
-#    6. (Opsional) Pasang Cloudflare Tunnel untuk akses publik
+#  atau langsung dari GitHub:
 #
-#  Re-run script ini aman (idempotent) — update, rebuild, restart.
+#    curl -fsSL https://raw.githubusercontent.com/ichalsmiler/web-perizina/main/install.sh | sudo bash
+#
+#  Server lama (update): jalankan perintah yang sama. Script mendeteksi
+#  instalasi yang ada, membackup database + file unggahan, menarik kode
+#  terbaru, build ulang, lalu restart. .env dan password admin tidak diubah.
+#
+#  Opsi lewat environment variable (semuanya opsional):
+#    ADMIN_USERNAME  username admin saat pasang baru (default: admin)
+#    ADMIN_PASSWORD  password admin; saat update, isi hanya bila ingin mengganti
+#    INSTALL_DIR     lokasi aplikasi (default: /opt/izinsiswa)
+#    BRANCH          branch GitHub (default: main)
+#    PORT            port aplikasi (default: 3000)
+#    BIND_HOST       alamat dengar (default: tetap seperti sebelumnya, atau
+#                    0.0.0.0 untuk pasang baru; setup-https.sh memakai 127.0.0.1)
+#    FORCE_RESET=1   buang perubahan manual pada file kode di server saat update
+#                    (database, .env, dan file unggahan tidak tersentuh)
+#
+#  Contoh: sudo ADMIN_USERNAME=smada ADMIN_PASSWORD='rahasia-kuat' bash install.sh
 # ============================================================
 
 set -euo pipefail
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-log()  { echo -e "${GREEN}[✓]${NC} $*"; }
-warn() { echo -e "${YELLOW}[!]${NC} $*"; }
-err()  { echo -e "${RED}[✗]${NC} $*" >&2; }
-
-if [[ $EUID -ne 0 ]]; then
-  err "Jalankan sebagai root: sudo bash install.sh"
-  exit 1
-fi
-
-INSTALL_DIR="/opt/izinsiswa"
+REPO_URL="https://github.com/ichalsmiler/web-perizina.git"
+INSTALL_DIR="${INSTALL_DIR:-/opt/izinsiswa}"
+BRANCH="${BRANCH:-main}"
+PORT="${PORT:-3000}"
 SERVICE_USER="izinsiswa"
 SERVICE_NAME="izinsiswa"
-REPO_URL="https://github.com/ichalsmiler/web-perizina.git"
-PORT=3000
-
-echo ""
-echo -e "${CYAN}╔═══════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║   IzinSiswa — Installer Otomatis          ║${NC}"
-echo -e "${CYAN}║   Aplikasi Perizinan Digital Siswa         ║${NC}"
-echo -e "${CYAN}╚═══════════════════════════════════════════╝${NC}"
-echo ""
-
-# --- 1. Paket dasar ---
-log "Menginstall paket dasar..."
-apt-get update -qq -y
-apt-get install -qq -y curl git build-essential ca-certificates >/dev/null 2>&1
-
-# --- 2. Node.js 22.x (WAJIB system-wide agar bisa diakses service user) ---
-NODE_BIN=""
-if [[ -x /usr/bin/node ]]; then
-  NODE_MAJOR=$(/usr/bin/node -v | sed 's/v//' | cut -d. -f1)
-  if [[ "$NODE_MAJOR" -ge 20 ]]; then
-    NODE_BIN=/usr/bin/node
-    log "Node.js system sudah terinstall: $(/usr/bin/node -v)"
-  fi
-fi
-
-if [[ -z "$NODE_BIN" ]]; then
-  log "Menginstall Node.js 22.x (system-wide)..."
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
-  apt-get install -qq -y nodejs >/dev/null 2>&1
-  NODE_BIN=/usr/bin/node
-  log "Node.js terinstall: $(/usr/bin/node -v)"
-fi
-
-# Pastikan npm tersedia
-if ! command -v npm >/dev/null 2>&1; then
-  err "npm tidak ditemukan setelah instalasi Node.js"
-  exit 1
-fi
-
-# --- 3. Clone / update repo ---
-if [[ -d "$INSTALL_DIR/.git" ]]; then
-  log "Repo sudah ada di $INSTALL_DIR, mengupdate..."
-  cd "$INSTALL_DIR"
-  git pull --ff-only 2>/dev/null || git pull --rebase 2>/dev/null || true
-else
-  # Kalau script dijalankan dari dalam repo, copy ke /opt
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [[ -f "$SCRIPT_DIR/web/package.json" ]]; then
-    log "Menyalin repo ke $INSTALL_DIR..."
-    mkdir -p "$INSTALL_DIR"
-    cp -a "$SCRIPT_DIR"/. "$INSTALL_DIR"/
-  else
-    log "Mengclone repo ke $INSTALL_DIR..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
-  fi
-fi
-
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+BACKUP_DIR="/var/backups/izinsiswa"
 WEB_DIR="$INSTALL_DIR/web"
-cd "$WEB_DIR"
 
-# --- 4. User service ---
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+step() { echo -e "\n${CYAN}==>${NC} $*"; }
+ok()   { echo -e "${GREEN}[ok]${NC} $*"; }
+warn() { echo -e "${YELLOW}[!]${NC} $*"; }
+die()  { echo -e "${RED}[gagal]${NC} $*" >&2; exit 1; }
+
+# Repo dimiliki user service; git menolak repo milik user lain kecuali ditandai aman.
+g() { git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" "$@"; }
+
+[[ $EUID -eq 0 ]] || die "Jalankan sebagai root: sudo bash install.sh"
+
+# Bash membaca script sedikit demi sedikit. Kalau file ini ada di dalam repo yang
+# akan di-update, git bisa menimpanya di tengah jalan; jalankan salinannya saja.
+SELF="${BASH_SOURCE[0]:-}"
+if [[ -z "${IZS_REEXEC:-}" && -f "$SELF" && "$(realpath "$SELF")" == "$(realpath -m "$INSTALL_DIR")"/* ]]; then
+  TMP_SELF="$(mktemp /tmp/izinsiswa-install.XXXXXX.sh)"
+  cp "$SELF" "$TMP_SELF"
+  IZS_REEXEC=1 exec bash "$TMP_SELF" "$@"
+fi
+command -v apt-get >/dev/null 2>&1 || die "Script ini untuk Ubuntu/Debian (apt-get tidak ditemukan)."
+
+if [[ -d "$INSTALL_DIR/.git" ]]; then
+  MODE="update"
+elif [[ -e "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
+  die "$INSTALL_DIR sudah ada tetapi bukan repo git. Pindahkan dulu, atau pakai INSTALL_DIR lain."
+else
+  MODE="baru"
+fi
+
+echo -e "${CYAN}IzinSiswa installer${NC} (mode: $MODE, lokasi: $INSTALL_DIR)"
+
+# --- 1. Paket dasar dan Node.js ---------------------------------------------
+step "Memasang paket dasar"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -qq -y curl git build-essential ca-certificates >/dev/null
+ok "curl, git, build-essential"
+
+NODE_MAJOR=0
+if [[ -x /usr/bin/node ]]; then
+  NODE_MAJOR=$(/usr/bin/node -v | sed 's/^v//' | cut -d. -f1)
+fi
+if (( NODE_MAJOR < 20 )); then
+  step "Memasang Node.js 22.x"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
+  apt-get install -qq -y nodejs >/dev/null
+fi
+ok "Node.js $(/usr/bin/node -v), npm $(npm -v)"
+
+# --- 2. User service ---------------------------------------------------------
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --create-home --shell /usr/sbin/nologin "$SERVICE_USER"
-  log "User '$SERVICE_USER' dibuat"
-else
-  log "User '$SERVICE_USER' sudah ada"
+  ok "User $SERVICE_USER dibuat"
 fi
 
-# --- 5. Environment ---
-if [[ ! -f "$WEB_DIR/.env" ]]; then
-  JWT=$(node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")
-  cat > "$WEB_DIR/.env" <<ENVEOF
-DATABASE_URL=file:./dev.db
-JWT_SECRET=$JWT
-ENVEOF
-  log ".env dibuat dengan JWT_SECRET acak"
+# --- 3. Kode aplikasi --------------------------------------------------------
+BACKUP_FILE=""
+if [[ "$MODE" == "update" ]]; then
+  step "Backup database, file unggahan, dan .env"
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+  ITEMS=()
+  for p in web/prisma/dev.db web/storage web/.env; do
+    if [[ -e "$INSTALL_DIR/$p" ]]; then ITEMS+=("$p"); fi
+  done
+  if (( ${#ITEMS[@]} > 0 )); then
+    BACKUP_FILE="$BACKUP_DIR/izinsiswa-$(date +%Y%m%d-%H%M%S).tar.gz"
+    tar -czf "$BACKUP_FILE" -C "$INSTALL_DIR" "${ITEMS[@]}"
+    ok "Backup: $BACKUP_FILE"
+    # Simpan 10 backup terakhir saja.
+    ls -1t "$BACKUP_DIR"/izinsiswa-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+  else
+    warn "Belum ada data untuk dibackup"
+  fi
+
+  step "Menarik kode terbaru ($BRANCH)"
+  g remote set-url origin "$REPO_URL"
+  g fetch --quiet origin "$BRANCH"
+  if [[ -n "$(g status --porcelain --untracked-files=no)" ]]; then
+    if [[ "${FORCE_RESET:-0}" == "1" ]]; then
+      warn "Membuang perubahan manual pada file kode (FORCE_RESET=1)"
+      g reset --hard --quiet "origin/$BRANCH"
+    else
+      g status --short --untracked-files=no
+      die "Ada file kode yang diubah manual di server (daftar di atas).
+       Update dibatalkan agar perubahan itu tidak hilang diam-diam.
+       Untuk membuangnya dan memakai versi GitHub: sudo FORCE_RESET=1 bash install.sh"
+    fi
+  else
+    g checkout --quiet "$BRANCH" 2>/dev/null || g checkout --quiet -b "$BRANCH" "origin/$BRANCH"
+    g merge --ff-only --quiet "origin/$BRANCH" \
+      || die "Riwayat git di server bercabang dari GitHub. Jalankan dengan FORCE_RESET=1 untuk menyamakan."
+  fi
+  ok "Kode di versi $(g log -1 --format='%h %s')"
 else
-  log ".env sudah ada, tidak diubah"
+  step "Mengunduh aplikasi dari GitHub"
+  git clone --quiet --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+  ok "Kode di versi $(g log -1 --format='%h %s')"
 fi
 
-# --- 6. Install dependencies ---
-log "Menginstall dependencies (npm ci)..."
-npm ci --loglevel=error 2>&1 | tail -3
+[[ -f "$WEB_DIR/package.json" ]] || die "Folder web/ tidak ditemukan di $INSTALL_DIR."
+cd "$WEB_DIR"
 
-# --- 7. Database ---
-log "Menjalankan migrasi database..."
-npx prisma migrate deploy 2>&1 | tail -3
-npx prisma generate 2>&1 | tail -1
+# --- 4. Konfigurasi ----------------------------------------------------------
+if [[ ! -f .env ]]; then
+  JWT=$(/usr/bin/node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")
+  printf 'DATABASE_URL=file:./dev.db\nJWT_SECRET=%s\n' "$JWT" > .env
+  chmod 600 .env
+  ok ".env dibuat dengan JWT_SECRET acak"
+else
+  ok ".env lama dipakai, tidak diubah"
+fi
 
-log "Seeding data awal (admin + contoh siswa)..."
-npm run seed 2>&1 | tail -2
+# Pasang baru tanpa ADMIN_PASSWORD: tanyakan di terminal bila ada (juga saat lewat curl | bash).
+if [[ "$MODE" == "baru" && -z "${ADMIN_PASSWORD:-}" ]] && { : </dev/tty; } 2>/dev/null; then
+  step "Akun admin sekolah"
+  read -r -p "Username admin [${ADMIN_USERNAME:-admin}]: " INPUT_USER </dev/tty || true
+  ADMIN_USERNAME="${INPUT_USER:-${ADMIN_USERNAME:-admin}}"
+  while true; do
+    read -r -s -p "Password admin (min. 8 karakter, kosongkan untuk dibuat acak): " P1 </dev/tty || true
+    echo
+    [[ -z "$P1" ]] && break
+    if (( ${#P1} < 8 )); then warn "Terlalu pendek."; continue; fi
+    read -r -s -p "Ulangi password: " P2 </dev/tty || true
+    echo
+    if [[ "$P1" == "$P2" ]]; then ADMIN_PASSWORD="$P1"; break; fi
+    warn "Password tidak sama, ulangi."
+  done
+fi
+export ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+if [[ -n "${ADMIN_PASSWORD:-}" ]]; then export ADMIN_PASSWORD; else unset ADMIN_PASSWORD; fi
 
-# --- 8. Build ---
-log "Building production bundle..."
-npm run build 2>&1 | tail -5
+# --- 5. Dependensi, database, build ------------------------------------------
+LOG_FILE="$(mktemp /tmp/izinsiswa-install.XXXXXX.log)"
+run() {
+  local label="$1"; shift
+  echo -n "    $label... "
+  if "$@" >>"$LOG_FILE" 2>&1; then
+    echo "selesai"
+  else
+    echo "GAGAL"
+    tail -n 40 "$LOG_FILE" >&2
+    die "$label gagal. Log lengkap: $LOG_FILE${BACKUP_FILE:+
+       Data sebelum update ada di: $BACKUP_FILE}"
+  fi
+}
 
-# --- 9. Ownership ---
+step "Memasang dependensi, database, dan build"
+run "npm ci" npm ci --no-audit --no-fund
+run "Migrasi database" npx prisma migrate deploy
+run "Prisma client" npx prisma generate
+
+# Output seed ditampilkan utuh: saat password admin dibuat acak, di sinilah ia dicetak.
+echo "    Seed admin:"
+if ! npm run --silent seed 2>&1 | sed 's/^/      /'; then
+  die "Seed gagal (pesan di atas)."
+fi
+
+run "Build produksi (beberapa menit)" npm run build
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-log "Ownership diatur ke $SERVICE_USER"
+ok "Kepemilikan file: $SERVICE_USER"
 
-# --- 10. Systemd service ---
-cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SVCEOF
+# --- 6. Service systemd ------------------------------------------------------
+if [[ -z "${BIND_HOST:-}" ]]; then
+  # Pertahankan alamat dengar lama (mis. 127.0.0.1 dari setup-https.sh).
+  BIND_HOST=$(grep -oP '^ExecStart=.*next start.*-H \K[^ ]+' "$SERVICE_FILE" 2>/dev/null || true)
+  BIND_HOST="${BIND_HOST:-0.0.0.0}"
+fi
+
+step "Memasang service $SERVICE_NAME (dengar di $BIND_HOST:$PORT)"
+cat > "$SERVICE_FILE" <<SVCEOF
 [Unit]
-Description=IzinSiswa — Aplikasi Perizinan Digital Siswa
+Description=IzinSiswa (aplikasi perizinan digital siswa)
 After=network.target
 
 [Service]
@@ -150,9 +223,8 @@ Group=$SERVICE_USER
 WorkingDirectory=$WEB_DIR
 EnvironmentFile=$WEB_DIR/.env
 Environment=NODE_ENV=production
-Environment=PORT=$PORT
-Environment=HOSTNAME=0.0.0.0
-ExecStart=/usr/bin/node $WEB_DIR/node_modules/.bin/next start
+# Next.js 16 mengabaikan variabel HOSTNAME; alamat dengar harus lewat -H.
+ExecStart=/usr/bin/node $WEB_DIR/node_modules/.bin/next start -H $BIND_HOST -p $PORT
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -163,51 +235,44 @@ WantedBy=multi-user.target
 SVCEOF
 
 systemctl daemon-reload
-systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
+systemctl enable --quiet "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
-log "Service '$SERVICE_NAME' diinstall dan dijalankan"
 
-# Tunggu aplikasi siap (maks 30 detik)
-log "Menunggu aplikasi siap..."
-READY=0
-for i in $(seq 1 15); do
-  CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$PORT/" 2>/dev/null || echo "000")
-  if [[ "$CODE" == "200" ]]; then
-    READY=1
-    log "Aplikasi berjalan dan merespons (HTTP 200)"
-    break
-  fi
+echo -n "    Menunggu aplikasi merespons"
+CHECK_HOST="$BIND_HOST"
+if [[ "$CHECK_HOST" == "0.0.0.0" ]]; then CHECK_HOST="127.0.0.1"; fi
+for _ in $(seq 1 30); do
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://$CHECK_HOST:$PORT/" || true)
+  [[ "$CODE" == "200" ]] && break
+  echo -n "."
   sleep 2
 done
-
-if [[ "$READY" -ne 1 ]]; then
-  err "Aplikasi TIDAK merespons setelah 30 detik."
-  err "Cek log dengan: sudo journalctl -u $SERVICE_NAME -n 50 --no-pager"
-  systemctl --no-pager status "$SERVICE_NAME" 2>&1 | head -15
-  exit 1
+echo
+if [[ "$CODE" != "200" ]]; then
+  journalctl -u "$SERVICE_NAME" -n 30 --no-pager >&2 || true
+  die "Aplikasi tidak merespons setelah 60 detik (log di atas).${BACKUP_FILE:+
+       Data sebelum update ada di: $BACKUP_FILE}"
 fi
+ok "Aplikasi berjalan (HTTP 200)"
+rm -f "$LOG_FILE"
 
-# --- Selesai ---
+# --- Selesai -----------------------------------------------------------------
 IP_ADDR=$(hostname -I | awk '{print $1}')
-echo ""
-echo -e "${CYAN}╔═══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  ${GREEN}Instalasi selesai!${CYAN}                                   ║${NC}"
-echo -e "${CYAN}╠═══════════════════════════════════════════════════════╣${NC}"
-echo -e "${CYAN}║${NC}                                                       ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Aplikasi : http://${IP_ADDR}:${PORT}                ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Admin    : http://${IP_ADDR}:${PORT}/admin/login    ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}                                                       ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Login admin:                                         ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}    Username : (diatur via ADMIN_USERNAME env var, default: admin) ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}    Password : (diatur via ADMIN_PASSWORD env var, acak jika kosong) ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}                                                       ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Perintah berguna:                                    ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}    sudo systemctl status izinsiswa                    ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}    sudo systemctl restart izinsiswa                   ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}    sudo journalctl -u izinsiswa -f                    ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}                                                       ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Update: cd /opt/izinsiswa && git pull                ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}          sudo bash install.sh                         ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}                                                       ${CYAN}║${NC}"
-echo -e "${CYAN}╚═══════════════════════════════════════════════════════╝${NC}"
-echo ""
+echo
+echo -e "${GREEN}Selesai ($MODE).${NC}"
+if [[ "$BIND_HOST" == "127.0.0.1" ]]; then
+  echo "  Aplikasi hanya dengar di localhost; akses lewat nginx: https://$IP_ADDR"
+else
+  echo "  Orang tua : http://$IP_ADDR:$PORT"
+  echo "  Admin     : http://$IP_ADDR:$PORT/admin/login"
+fi
+if [[ "$MODE" == "baru" ]]; then
+  echo "  Username admin: $ADMIN_USERNAME"
+  if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
+    echo "  Password admin: lihat baris 'Admin dibuat' di bagian Seed admin di atas, catat sekarang."
+  fi
+fi
+if [[ -n "$BACKUP_FILE" ]]; then echo "  Backup sebelum update: $BACKUP_FILE"; fi
+echo
+echo "  Update berikutnya : sudo bash $INSTALL_DIR/install.sh"
+echo "  Status / log      : sudo systemctl status $SERVICE_NAME  |  sudo journalctl -u $SERVICE_NAME -f"

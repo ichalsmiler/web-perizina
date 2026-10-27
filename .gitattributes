@@ -1,0 +1,2 @@
+# Script shell harus LF; CRLF dari Windows membuat bash gagal di server.
+*.sh text eol=lf

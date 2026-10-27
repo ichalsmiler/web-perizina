@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { STATUS_LABELS, leaveTypeLabel } from "@/lib/constants";
+import { leaveTypeLabel } from "@/lib/constants";
+import StatusLabel from "@/components/StatusLabel";
 
 type Row = {
   id: string;
@@ -17,24 +18,38 @@ type Row = {
   submittedAt: string;
 };
 
-function statusBadgeClass(status: string) {
-  if (status === "APPROVED") return "bg-success/10 text-success";
-  if (status === "REJECTED") return "bg-danger/10 text-danger";
-  return "bg-secondary/10 text-secondary";
-}
+const STATUS_FILTERS = [
+  { value: "PENDING", label: "Menunggu" },
+  { value: "APPROVED", label: "Disetujui" },
+  { value: "REJECTED", label: "Ditolak" },
+  { value: "", label: "Semua" },
+];
+
+const EMPTY_TEXT: Record<string, string> = {
+  PENDING: "Tidak ada permohonan yang menunggu. Pengajuan baru dari orang tua akan muncul di sini.",
+  APPROVED: "Belum ada permohonan yang disetujui.",
+  REJECTED: "Belum ada permohonan yang ditolak.",
+  "": "Belum ada permohonan izin yang masuk.",
+};
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", {
-    day: "2-digit",
+    day: "numeric",
     month: "short",
-    year: "numeric",
   });
+}
+
+function formatRange(start: string, end: string) {
+  return start.slice(0, 10) === end.slice(0, 10)
+    ? formatDate(start)
+    : `${formatDate(start)} sampai ${formatDate(end)}`;
 }
 
 export default function AdminDashboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const [status, setStatus] = useState("PENDING");
   const [studentName, setStudentName] = useState("");
   const [ticketCode, setTicketCode] = useState("");
   const [pagination, setPagination] = useState({ totalItems: 0, totalPages: 1 });
@@ -42,6 +57,7 @@ export default function AdminDashboardPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (studentName) params.set("studentName", studentName);
@@ -49,13 +65,17 @@ export default function AdminDashboardPage() {
     params.set("page", String(page));
     params.set("limit", "10");
 
-    const res = await fetch(`/api/admin/leave-requests?${params.toString()}`);
-    const json = await res.json();
-    if (json.success) {
+    try {
+      const res = await fetch(`/api/admin/leave-requests?${params.toString()}`);
+      const json = await res.json();
+      if (!json.success) throw new Error();
       setRows(json.data);
       setPagination(json.pagination);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [status, studentName, ticketCode, page]);
 
   useEffect(() => {
@@ -63,151 +83,219 @@ export default function AdminDashboardPage() {
     load();
   }, [load]);
 
-  const pendingCount = rows.filter((r) => r.status === "PENDING").length;
+  const isFiltered = !!studentName || !!ticketCode;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Permohonan Izin</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-semibold">Permohonan izin</h1>
+          <p className="text-sm text-muted mt-1">
+            Buka permohonan untuk memeriksa foto dan dokumen, lalu setujui atau tolak.
+          </p>
+        </div>
         <a
           href={`/api/admin/leave-requests/export${status ? `?status=${status}` : ""}`}
-          className="text-sm bg-neutral-dark text-white rounded-md px-3 py-1.5 hover:bg-primary transition-colors"
+          className="btn btn-sm btn-secondary"
         >
-          Ekspor CSV
+          Unduh CSV
+          {status ? ` (${STATUS_FILTERS.find((f) => f.value === status)?.label})` : ""}
         </a>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="text-xs text-neutral-medium block mb-1">Status</label>
-          <select
-            value={status}
-            onChange={(e) => {
-              setPage(1);
-              setStatus(e.target.value);
-            }}
-            className="border border-neutral-medium rounded-md px-2 py-1.5 text-sm"
-          >
-            <option value="">Semua</option>
-            <option value="PENDING">Menunggu</option>
-            <option value="APPROVED">Disetujui</option>
-            <option value="REJECTED">Ditolak</option>
-          </select>
+      <div className="card p-3 sm:p-4 mb-4">
+        <div
+          role="group"
+          aria-label="Saring status"
+          className="grid grid-cols-2 min-[520px]:grid-cols-4 gap-1 p-1 bg-sunken rounded"
+        >
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={status === f.value}
+              onClick={() => {
+                setPage(1);
+                setStatus(f.value);
+              }}
+              className={`min-h-[44px] rounded text-sm font-semibold transition-colors ${
+                status === f.value
+                  ? "bg-surface text-heading border border-field"
+                  : "text-muted hover:text-ink border border-transparent"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
-        <div>
-          <label className="text-xs text-neutral-medium block mb-1">Nama Siswa</label>
-          <input
-            value={studentName}
-            onChange={(e) => {
-              setPage(1);
-              setStudentName(e.target.value);
-            }}
-            placeholder="Cari nama siswa"
-            className="border border-neutral-medium rounded-md px-2 py-1.5 text-sm"
-          />
+
+        <div className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-3 mt-3">
+          <div>
+            <label htmlFor="f-name" className="label">
+              Nama siswa
+            </label>
+            <input
+              id="f-name"
+              value={studentName}
+              onChange={(e) => {
+                setPage(1);
+                setStudentName(e.target.value);
+              }}
+              placeholder="Ketik nama siswa"
+              className="field"
+            />
+          </div>
+          <div>
+            <label htmlFor="f-ticket" className="label">
+              Kode tiket
+            </label>
+            <input
+              id="f-ticket"
+              value={ticketCode}
+              onChange={(e) => {
+                setPage(1);
+                setTicketCode(e.target.value);
+              }}
+              placeholder="IZS-..."
+              spellCheck={false}
+              className="field font-mono"
+            />
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-neutral-medium block mb-1">Kode Tiket</label>
-          <input
-            value={ticketCode}
-            onChange={(e) => {
-              setPage(1);
-              setTicketCode(e.target.value);
-            }}
-            placeholder="IZS-..."
-            className="border border-neutral-medium rounded-md px-2 py-1.5 text-sm font-mono"
-          />
-        </div>
-        {!loading && (
-          <span className="text-xs text-neutral-medium ml-auto">
-            {pendingCount} permohonan menunggu di halaman ini &middot;{" "}
-            {pagination.totalItems} total
-          </span>
+      </div>
+
+      <div aria-live="polite" aria-busy={loading}>
+        {loading ? (
+          <p className="card p-5 text-muted">Memuat permohonan izin...</p>
+        ) : loadError ? (
+          <div role="alert" className="alert-bad flex flex-wrap items-center justify-between gap-3">
+            <span>Daftar permohonan gagal dimuat. Periksa koneksi ke server.</span>
+            <button type="button" onClick={load} className="btn btn-sm btn-secondary">
+              Muat ulang
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="card p-5">
+            <p className="font-medium">
+              {isFiltered
+                ? "Tidak ada permohonan yang cocok dengan nama atau kode tiket ini."
+                : EMPTY_TEXT[status]}
+            </p>
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentName("");
+                  setTicketCode("");
+                }}
+                className="btn btn-sm btn-secondary mt-3"
+              >
+                Hapus pencarian
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-muted mb-2">
+              {pagination.totalItems} permohonan
+              {pagination.totalPages > 1 ? `, halaman ${page} dari ${pagination.totalPages}` : ""}
+            </p>
+
+            {/* Layar lebar: tabel agar admin bisa memindai banyak baris. */}
+            <div className="card hidden md:block overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-sunken text-left text-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">Siswa</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Jenis izin</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Tanggal izin</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      <span className="sr-only">Aksi</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-sunken">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-heading">{r.studentName}</div>
+                        <div className="text-muted">
+                          Kelas {r.studentClass}
+                          {r.parentName ? `, diajukan ${r.parentName}` : ""}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{leaveTypeLabel(r.leaveType)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {formatRange(r.startDate, r.endDate)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusLabel status={r.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/admin/requests/${r.id}`}
+                          className="btn btn-sm btn-secondary"
+                          aria-label={`Periksa permohonan ${r.studentName}`}
+                        >
+                          {r.status === "PENDING" ? "Periksa" : "Lihat"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* HP: kartu yang seluruhnya bisa diketuk. */}
+            <ul className="md:hidden flex flex-col gap-2">
+              {rows.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`/admin/requests/${r.id}`}
+                    className="card block p-4 hover:bg-sunken"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-heading truncate">
+                          {r.studentName}
+                        </span>
+                        <span className="block text-sm text-muted">Kelas {r.studentClass}</span>
+                      </span>
+                      <StatusLabel status={r.status} />
+                    </div>
+                    <p className="text-sm mt-2">
+                      {leaveTypeLabel(r.leaveType)}, {formatRange(r.startDate, r.endDate)}
+                    </p>
+                    {r.parentName && (
+                      <p className="text-sm text-muted">Diajukan {r.parentName}</p>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-neutral-medium border-b border-neutral-light">
-              <th className="p-3">Kode Tiket</th>
-              <th className="p-3">Siswa</th>
-              <th className="p-3">Jenis Izin</th>
-              <th className="p-3">Tanggal</th>
-              <th className="p-3">Status</th>
-              <th className="p-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="p-4 text-neutral-medium" colSpan={6}>
-                  Memuat...
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td className="p-4 text-neutral-medium" colSpan={6}>
-                  Tidak ada permohonan izin yang sesuai.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="border-b border-neutral-light last:border-0">
-                  <td className="p-3 font-mono text-xs">{r.ticketCode}</td>
-                  <td className="p-3">
-                    <div className="font-medium">{r.studentName}</div>
-                    <div className="text-xs text-neutral-medium">
-                      Kelas {r.studentClass}
-                      {r.parentName ? ` · ${r.parentName}` : ""}
-                    </div>
-                  </td>
-                  <td className="p-3">{leaveTypeLabel(r.leaveType)}</td>
-                  <td className="p-3 text-xs">
-                    {formatDate(r.startDate)} &ndash; {formatDate(r.endDate)}
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full font-medium ${statusBadgeClass(
-                        r.status
-                      )}`}
-                    >
-                      {STATUS_LABELS[r.status]}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <Link
-                      href={`/admin/requests/${r.id}`}
-                      className="text-secondary hover:underline text-xs"
-                    >
-                      Lihat Detail
-                    </Link>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {pagination.totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(
-            (p) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={`w-8 h-8 rounded-md text-sm ${
-                  p === page
-                    ? "bg-primary text-white"
-                    : "bg-white text-neutral-dark hover:bg-neutral-light"
-                }`}
-              >
-                {p}
-              </button>
-            )
-          )}
-        </div>
+      {!loading && !loadError && pagination.totalPages > 1 && (
+        <nav aria-label="Halaman" className="flex flex-wrap justify-center gap-2 mt-4">
+          {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPage(p)}
+              aria-current={p === page ? "page" : undefined}
+              className={`min-w-[44px] min-h-[44px] rounded text-sm font-semibold border ${
+                p === page
+                  ? "bg-brand text-on-brand border-brand"
+                  : "bg-surface text-ink border-field hover:bg-sunken"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </nav>
       )}
     </div>
   );

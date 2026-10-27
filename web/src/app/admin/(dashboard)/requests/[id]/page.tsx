@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { STATUS_LABELS, leaveTypeLabel } from "@/lib/constants";
+import StatusLabel from "@/components/StatusLabel";
 
 type Detail = {
   id: string;
@@ -34,10 +35,22 @@ type Detail = {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", {
+    weekday: "short",
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+}
+
+function BackLink() {
+  return (
+    <Link
+      href="/admin/dashboard"
+      className="inline-flex items-center min-h-[44px] text-sm font-medium text-link"
+    >
+      &larr; Daftar permohonan
+    </Link>
+  );
 }
 
 export default function RequestDetailPage({
@@ -48,22 +61,29 @@ export default function RequestDetailPage({
   const { id } = use(params);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [loadState, setLoadState] = useState<"ok" | "notFound" | "error">("ok");
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const rejectRef = useRef<HTMLTextAreaElement>(null);
 
   async function load() {
     setLoading(true);
-    const res = await fetch(`/api/admin/leave-requests/${id}`);
-    const json = await res.json();
-    if (!json.success) {
-      setNotFound(true);
-    } else {
-      setDetail(json.data);
+    try {
+      const res = await fetch(`/api/admin/leave-requests/${id}`);
+      const json = await res.json();
+      if (!json.success) {
+        setLoadState("notFound");
+      } else {
+        setDetail(json.data);
+        setLoadState("ok");
+      }
+    } catch {
+      setLoadState("error");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -72,231 +92,284 @@ export default function RequestDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function handleApprove() {
+  async function updateStatus(body: object) {
     setActionError(null);
     setProcessing(true);
     try {
       const res = await fetch(`/api/admin/leave-requests/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Approved" }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!json.success) {
         setActionError(json.error?.message ?? "Gagal memproses permohonan.");
         return;
       }
+      setShowRejectForm(false);
       await load();
+    } catch {
+      setActionError("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setProcessing(false);
     }
   }
 
-  async function handleReject() {
-    setActionError(null);
+  function handleReject() {
     if (rejectReason.trim().length < 10) {
       setActionError("Alasan penolakan minimal 10 karakter.");
+      rejectRef.current?.focus();
       return;
     }
-    setProcessing(true);
-    try {
-      const res = await fetch(`/api/admin/leave-requests/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Rejected", rejectionReason: rejectReason.trim() }),
-      });
-      const json = await res.json();
-      if (!json.success) {
-        setActionError(json.error?.message ?? "Gagal memproses permohonan.");
-        return;
-      }
-      await load();
-    } finally {
-      setProcessing(false);
-    }
+    updateStatus({ status: "Rejected", rejectionReason: rejectReason.trim() });
   }
 
-  if (loading) return <p className="text-sm text-neutral-medium">Memuat...</p>;
-  if (notFound || !detail)
+  if (loading && !detail) {
     return (
       <div>
-        <p className="text-danger text-sm mb-2">Permohonan tidak ditemukan.</p>
-        <Link href="/admin/dashboard" className="text-secondary text-sm hover:underline">
-          &larr; Kembali ke daftar
-        </Link>
+        <BackLink />
+        <p className="card p-5 mt-3 text-muted" aria-busy="true">
+          Memuat permohonan...
+        </p>
       </div>
     );
+  }
+
+  if (loadState !== "ok" || !detail) {
+    return (
+      <div>
+        <BackLink />
+        <div role="alert" className="alert-bad mt-3 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            {loadState === "notFound"
+              ? "Permohonan ini tidak ditemukan. Mungkin tautannya salah."
+              : "Permohonan gagal dimuat. Periksa koneksi ke server."}
+          </span>
+          {loadState === "error" && (
+            <button type="button" onClick={load} className="btn btn-sm btn-secondary">
+              Muat ulang
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const isPdf = detail.documentUrl?.toLowerCase().endsWith(".pdf");
+  const registeredParent = detail.student.parentName || detail.student.parentPhone;
 
   return (
     <div>
-      <Link href="/admin/dashboard" className="text-sm text-secondary hover:underline">
-        &larr; Kembali ke daftar
-      </Link>
+      <BackLink />
 
-      <div className="bg-white rounded-lg shadow-sm p-6 mt-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-lg font-semibold">{detail.student.fullName}</h1>
-            <p className="text-xs text-neutral-medium">
-              NIS {detail.student.nis} &middot; Kelas {detail.student.grade}{" "}
-              {detail.student.class}
-            </p>
-          </div>
-          <span className="font-mono text-xs bg-neutral-light px-2 py-1 rounded-md">
-            {detail.ticketCode}
-          </span>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold">{detail.student.fullName}</h1>
+          <p className="text-sm text-muted mt-1">
+            Kelas {detail.student.grade} {detail.student.class} &middot; NIS {detail.student.nis}
+          </p>
         </div>
+        <div className="flex flex-col items-start sm:items-end gap-1">
+          <StatusLabel status={detail.status} size="lg" />
+          <span className="font-mono text-sm text-muted">{detail.ticketCode}</span>
+        </div>
+      </div>
 
-        <dl className="grid grid-cols-2 gap-4 text-sm mb-6">
-          <div>
-            <dt className="text-xs text-neutral-medium">Jenis Izin</dt>
-            <dd>{leaveTypeLabel(detail.leaveType)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-neutral-medium">Status</dt>
-            <dd>{STATUS_LABELS[detail.status]}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-neutral-medium">Tanggal</dt>
-            <dd>
-              {formatDate(detail.startDate)} &ndash; {formatDate(detail.endDate)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-neutral-medium">Diajukan</dt>
-            <dd>{formatDate(detail.submittedAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-neutral-medium">
-              Nama Pengaju (Orang Tua/Wali)
-            </dt>
-            <dd className="font-medium">{detail.submitter.parentName}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-neutral-medium">
-              WhatsApp Pengaju
-            </dt>
-            <dd className="font-medium">{detail.submitter.parentWhatsapp}</dd>
-          </div>
-          {(detail.student.parentName || detail.student.parentPhone) && (
-            <div className="col-span-2 text-xs text-neutral-medium">
-              Kontak terdaftar di data siswa: {detail.student.parentName ?? "-"}
-              {detail.student.parentPhone ? ` · ${detail.student.parentPhone}` : ""}
+      <div className="grid gap-4 mt-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start">
+        <section className="card" aria-labelledby="h-info">
+          <h2 id="h-info" className="sr-only">
+            Rincian permohonan
+          </h2>
+          <dl className="p-5 grid grid-cols-1 min-[420px]:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+            <div className="min-[420px]:col-span-2">
+              <dt className="text-muted">Tanggal izin</dt>
+              <dd className="text-base font-semibold text-heading mt-0.5">
+                {formatDate(detail.startDate)}
+                {detail.startDate.slice(0, 10) !== detail.endDate.slice(0, 10) && (
+                  <> sampai {formatDate(detail.endDate)}</>
+                )}
+              </dd>
             </div>
-          )}
-          {detail.reason && (
-            <div className="col-span-2">
-              <dt className="text-xs text-neutral-medium">Catatan</dt>
-              <dd>{detail.reason}</dd>
+            <div>
+              <dt className="text-muted">Jenis izin</dt>
+              <dd className="font-medium mt-0.5">{leaveTypeLabel(detail.leaveType)}</dd>
             </div>
-          )}
-        </dl>
+            <div>
+              <dt className="text-muted">Diajukan</dt>
+              <dd className="font-medium mt-0.5">{formatDate(detail.submittedAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Pengaju</dt>
+              <dd className="font-medium mt-0.5">{detail.submitter.parentName}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">WhatsApp pengaju</dt>
+              <dd className="font-medium font-mono mt-0.5">{detail.submitter.parentWhatsapp}</dd>
+            </div>
+            <div className="min-[420px]:col-span-2">
+              <dt className="text-muted">Kontak terdaftar di data siswa</dt>
+              <dd className="mt-0.5">
+                {registeredParent ? (
+                  <>
+                    {detail.student.parentName ?? "Nama belum diisi"}
+                    {detail.student.parentPhone && (
+                      <span className="font-mono">, {detail.student.parentPhone}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-muted">Belum diisi, tidak bisa dibandingkan.</span>
+                )}
+              </dd>
+            </div>
+            <div className="min-[420px]:col-span-2">
+              <dt className="text-muted">Catatan orang tua</dt>
+              <dd className="mt-0.5 whitespace-pre-line">
+                {detail.reason || <span className="text-muted">Tidak ada catatan.</span>}
+              </dd>
+            </div>
+          </dl>
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <p className="text-xs text-neutral-medium mb-1">Dokumen Pendukung</p>
+          <div className="tear" aria-hidden="true" />
+
+          <div className="p-5 bg-sunken rounded-b-[8px]">
+            {detail.status !== "PENDING" ? (
+              <div className="text-sm">
+                <p>
+                  Permohonan ini sudah <strong>{STATUS_LABELS[detail.status].toLowerCase()}</strong>
+                  {detail.processedBy ? ` oleh ${detail.processedBy}` : ""}.
+                </p>
+                {detail.adminNotes && (
+                  <p className="mt-2">
+                    <span className="text-muted">Alasan: </span>
+                    {detail.adminNotes}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-base font-semibold mb-3">Keputusan</h2>
+                {actionError && (
+                  <p role="alert" className="alert-bad mb-3">
+                    {actionError}
+                  </p>
+                )}
+                {!showRejectForm ? (
+                  <div className="flex flex-col min-[420px]:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => updateStatus({ status: "Approved" })}
+                      disabled={processing}
+                      className="btn btn-ok"
+                    >
+                      {processing ? "Memproses..." : "Setujui izin"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionError(null);
+                        setShowRejectForm(true);
+                        requestAnimationFrame(() => rejectRef.current?.focus());
+                      }}
+                      disabled={processing}
+                      className="btn btn-bad-outline"
+                    >
+                      Tolak
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col gap-2"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && !processing) setShowRejectForm(false);
+                    }}
+                  >
+                    <label htmlFor="reject-reason" className="label mb-0">
+                      Alasan penolakan
+                    </label>
+                    <p className="hint">Dibaca orang tua di halaman lacak status. 10 sampai 250 karakter.</p>
+                    <textarea
+                      id="reject-reason"
+                      ref={rejectRef}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      maxLength={250}
+                      rows={3}
+                      className="field"
+                    />
+                    <p className="hint text-right">{rejectReason.trim().length}/250</p>
+                    <div className="flex flex-col min-[420px]:flex-row gap-3">
+                      <button
+                        type="button"
+                        onClick={handleReject}
+                        disabled={processing}
+                        className="btn btn-bad"
+                      >
+                        {processing ? "Memproses..." : "Tolak permohonan"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowRejectForm(false)}
+                        disabled={processing}
+                        className="btn btn-secondary"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="h-bukti" className="flex flex-col gap-4">
+          <h2 id="h-bukti" className="sr-only">
+            Bukti pengajuan
+          </h2>
+          <figure className="card p-4">
+            <figcaption className="flex items-center justify-between gap-2 mb-3">
+              <span className="font-semibold text-heading">Foto verifikasi pengaju</span>
+              <a href={detail.selfieUrl} target="_blank" rel="noreferrer" className="link text-sm">
+                Buka ukuran penuh
+              </a>
+            </figcaption>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={detail.selfieUrl}
+              alt={`Foto verifikasi ${detail.submitter.parentName}`}
+              className="w-full max-h-[420px] object-contain rounded bg-sunken"
+            />
+          </figure>
+
+          <figure className="card p-4">
+            <figcaption className="flex items-center justify-between gap-2 mb-3">
+              <span className="font-semibold text-heading">Dokumen pendukung</span>
+              {detail.documentUrl && (
+                <a href={detail.documentUrl} target="_blank" rel="noreferrer" className="link text-sm">
+                  Buka di tab baru
+                </a>
+              )}
+            </figcaption>
             {detail.documentUrl ? (
               isPdf ? (
                 <embed
                   src={detail.documentUrl}
                   type="application/pdf"
-                  className="w-full h-64 rounded-md border border-neutral-light"
+                  className="w-full h-80 rounded border border-line"
                 />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={detail.documentUrl}
                   alt="Dokumen pendukung"
-                  className="w-full rounded-md border border-neutral-light"
+                  className="w-full max-h-[480px] object-contain rounded bg-sunken"
                 />
               )
             ) : (
-              <p className="text-sm text-neutral-medium">Tidak ada dokumen.</p>
+              <p className="text-sm text-muted">Orang tua tidak melampirkan dokumen.</p>
             )}
-          </div>
-          <div>
-            <p className="text-xs text-neutral-medium mb-1">Selfie Verifikasi</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={detail.selfieUrl}
-              alt="Selfie verifikasi"
-              className="w-full rounded-md border border-neutral-light"
-            />
-          </div>
-        </div>
-
-        {detail.status !== "PENDING" && (
-          <div
-            className={`rounded-md p-3 text-sm ${
-              detail.status === "APPROVED"
-                ? "bg-success/10 text-success"
-                : "bg-danger/10 text-danger"
-            }`}
-          >
-            Permohonan ini telah <strong>{STATUS_LABELS[detail.status]}</strong>
-            {detail.processedBy ? ` oleh ${detail.processedBy}` : ""}.
-            {detail.adminNotes && (
-              <p className="mt-1">Alasan: {detail.adminNotes}</p>
-            )}
-          </div>
-        )}
-
-        {detail.status === "PENDING" && (
-          <div className="border-t border-neutral-light pt-4">
-            {actionError && (
-              <p className="text-sm text-danger mb-3">{actionError}</p>
-            )}
-            {!showRejectForm ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleApprove}
-                  disabled={processing}
-                  className="bg-success text-white rounded-md px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                  Setujui
-                </button>
-                <button
-                  onClick={() => setShowRejectForm(true)}
-                  disabled={processing}
-                  className="bg-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                  Tolak
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">
-                  Alasan Penolakan (10-250 karakter)
-                </label>
-                <textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  maxLength={250}
-                  rows={3}
-                  className="border border-neutral-medium rounded-md px-3 py-2 text-sm"
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleReject}
-                    disabled={processing}
-                    className="bg-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                  >
-                    Konfirmasi Tolak
-                  </button>
-                  <button
-                    onClick={() => setShowRejectForm(false)}
-                    disabled={processing}
-                    className="text-sm text-neutral-medium hover:underline"
-                  >
-                    Batal
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          </figure>
+        </section>
       </div>
     </div>
   );

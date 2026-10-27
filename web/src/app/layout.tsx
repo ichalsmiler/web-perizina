@@ -5,7 +5,7 @@ import "./globals.css";
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["500", "600", "700"],
 });
 
 const inter = Inter({
@@ -16,7 +16,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "IzinSiswa - Aplikasi Perizinan Digital",
   description: "Ajukan dan lacak izin siswa secara digital, tanpa perlu akun.",
-  // Agar tampilan menyesuaikan lebar layar HP dan bisa di-zoom (aksesibilitas).
   appleWebApp: {
     capable: true,
     title: "IzinSiswa",
@@ -29,8 +28,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#0b574b",
+  themeColor: "#2c3e50",
 };
+
+// Dijalankan sebelum paint agar tema yang disimpan tidak berkedip.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
 export default function RootLayout({
   children,
@@ -40,11 +42,13 @@ export default function RootLayout({
   return (
     <html
       lang="id"
+      suppressHydrationWarning
       className={`${poppins.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-neutral-light text-neutral-dark font-sans">
-        {children}
-      </body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );
 }

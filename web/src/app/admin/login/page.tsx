@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
 function LoginForm() {
   const router = useRouter();
@@ -23,7 +24,7 @@ function LoginForm() {
       });
       const json = await res.json();
       if (!json.success) {
-        setError(json.error?.message ?? "Invalid username or password.");
+        setError(json.error?.message ?? "Username atau password salah.");
         return;
       }
       router.push(searchParams.get("next") || "/admin/dashboard");
@@ -37,44 +38,49 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-semibold text-primary">IzinSiswa Admin</h1>
-        <p className="text-sm text-neutral-medium mt-2">
-          Masuk untuk mengelola data siswa dan permohonan izin.
-        </p>
-      </div>
+      <p className="font-heading font-semibold text-lg text-heading">IzinSiswa</p>
+      <h1 className="text-2xl font-semibold mt-1">Masuk admin sekolah</h1>
+      <p className="mt-2 text-sm text-muted">
+        Untuk memeriksa pengajuan izin dan mengelola data siswa.
+      </p>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-3"
-      >
+      <form onSubmit={handleSubmit} className="card mt-6 p-5 sm:p-6 flex flex-col gap-4">
         <div>
-          <label className="text-sm font-medium block mb-1">Username / Email</label>
+          <label htmlFor="login-user" className="label">
+            Username atau email
+          </label>
           <input
+            id="login-user"
             type="text"
             required
+            autoComplete="username"
+            autoCapitalize="none"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+            className="field"
           />
         </div>
         <div>
-          <label className="text-sm font-medium block mb-1">Password</label>
+          <label htmlFor="login-pass" className="label">
+            Password
+          </label>
           <input
+            id="login-pass"
             type="password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2 text-sm"
+            className="field"
           />
         </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-primary text-white rounded-md py-2 text-sm font-medium hover:bg-neutral-dark transition-colors disabled:opacity-60"
-        >
-          {loading ? "Memproses..." : "Masuk"}
+        {error && (
+          <p role="alert" className="alert-bad">
+            {error}
+          </p>
+        )}
+        <button type="submit" disabled={loading} className="btn btn-primary">
+          {loading ? "Memeriksa..." : "Masuk"}
         </button>
       </form>
     </div>
@@ -83,10 +89,15 @@ function LoginForm() {
 
 export default function AdminLoginPage() {
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-      <Suspense>
-        <LoginForm />
-      </Suspense>
+    <main className="flex-1 flex flex-col px-4 py-6">
+      <div className="flex justify-end">
+        <ThemeToggle className="text-ink hover:bg-sunken" />
+      </div>
+      <div className="flex-1 flex items-center justify-center py-8">
+        <Suspense>
+          <LoginForm />
+        </Suspense>
+      </div>
     </main>
   );
 }

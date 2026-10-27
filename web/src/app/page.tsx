@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 
 type StudentResult = {
   id: string;
@@ -12,7 +13,6 @@ type StudentResult = {
 };
 
 export default function HomePage() {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<StudentResult[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,88 +47,138 @@ export default function HomePage() {
   }
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-2xl font-semibold text-primary">IzinSiswa</h1>
-          <p className="text-sm text-neutral-medium mt-2">
-            Ajukan izin siswa secara digital. Tidak perlu akun — cukup cari
-            nama atau NIS anak Anda.
-          </p>
-        </div>
-
-        <form
-          onSubmit={handleSearch}
-          className="bg-white rounded-lg shadow-sm p-5 sm:p-6 flex flex-col gap-3"
-        >
-          <label htmlFor="query" className="text-sm font-medium">
-            Masukkan Nama Lengkap atau NIS Siswa
-          </label>
-          <input
-            id="query"
-            type="text"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Contoh: Jane Doe atau 0012345678"
-            className="border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-primary text-white rounded-md py-3 text-base font-medium hover:bg-neutral-dark active:bg-neutral-dark transition-colors disabled:opacity-60"
-          >
-            {loading ? "Mencari..." : "Cari Siswa"}
-          </button>
-          {error && (
-            <p className="text-sm text-danger bg-danger/5 border border-danger/20 rounded-md px-3 py-2.5">
-              {error}
+    <>
+      <SiteHeader />
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8 sm:py-12 lg:py-16">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12 items-start">
+          <section aria-labelledby="judul">
+            <h1
+              id="judul"
+              className="text-[1.75rem] leading-tight sm:text-[2rem] font-semibold"
+            >
+              Ajukan izin tidak masuk sekolah
+            </h1>
+            <p className="mt-3 text-base text-muted max-w-prose">
+              Cari anak Anda dengan nama lengkap atau NIS. Tidak perlu membuat
+              akun. Setelah terkirim, Anda mendapat kode tiket untuk memantau
+              keputusan sekolah.
             </p>
-          )}
-        </form>
 
-        {results && (
-          <div className="mt-4 bg-white rounded-lg shadow-sm divide-y divide-neutral-light overflow-hidden">
-            {results.length === 0 ? (
-              <p className="p-5 text-sm text-neutral-medium">
-                Siswa tidak ditemukan. Periksa kembali nama atau NIS, atau
-                hubungi admin sekolah.
-              </p>
-            ) : (
-              results.map((s) => (
+            <form
+              onSubmit={handleSearch}
+              className="card mt-6 p-4 sm:p-6"
+              role="search"
+            >
+              <label htmlFor="query" className="label">
+                Nama lengkap atau NIS siswa
+              </label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  id="query"
+                  type="text"
+                  inputMode="search"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Ketik nama atau NIS"
+                  aria-describedby={error ? "query-error" : undefined}
+                  className="field sm:flex-1"
+                />
                 <button
-                  key={s.id}
-                  onClick={() => router.push(`/ajukan/${s.id}`)}
-                  className="w-full text-left px-4 py-4 hover:bg-neutral-light active:bg-neutral-light transition-colors flex items-center justify-between gap-3"
+                  type="submit"
+                  disabled={loading}
+                  className="btn btn-primary sm:w-auto"
                 >
-                  <span className="min-w-0">
-                    <span className="block font-medium truncate">
-                      {s.fullName}
-                    </span>
-                    <span className="block text-xs text-neutral-medium">
-                      NIS {s.nis} &middot; Kelas {s.grade} {s.class}
-                    </span>
-                  </span>
-                  <span className="flex-none text-secondary text-sm font-medium">
-                    Pilih &rarr;
-                  </span>
+                  {loading ? "Mencari..." : "Cari siswa"}
                 </button>
-              ))
-            )}
-          </div>
-        )}
+              </div>
+              {error && (
+                <p id="query-error" role="alert" className="alert-bad mt-3">
+                  {error}
+                </p>
+              )}
+            </form>
 
-        <div className="text-center mt-5">
-          <a
-            href="/lacak"
-            className="inline-flex items-center justify-center min-h-[44px] px-4 text-sm text-secondary hover:underline"
-          >
-            Sudah punya kode tiket? Lacak status pengajuan
-          </a>
+            <div aria-live="polite">
+              {results && (
+                <div className="mt-4">
+                  {results.length === 0 ? (
+                    <div className="card p-5">
+                      <p className="font-medium">
+                        Tidak ada siswa dengan nama atau NIS &ldquo;{query.trim()}&rdquo;.
+                      </p>
+                      <p className="hint mt-1">
+                        Coba tulis nama lengkap sesuai rapor, atau gunakan NIS.
+                        Jika tetap tidak muncul, hubungi tata usaha sekolah.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="hint mb-2">
+                        {results.length === 1
+                          ? "1 siswa ditemukan. Pastikan nama dan kelasnya benar."
+                          : `${results.length} siswa ditemukan. Pilih anak Anda.`}
+                      </p>
+                      <ul className="card divide-y divide-line overflow-hidden">
+                        {results.map((s) => (
+                          <li key={s.id}>
+                            <Link
+                              href={`/ajukan/${s.id}`}
+                              className="flex items-center justify-between gap-3 px-4 py-4 min-h-[64px] hover:bg-sunken transition-colors"
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-semibold text-heading truncate">
+                                  {s.fullName}
+                                </span>
+                                <span className="block text-sm text-muted">
+                                  Kelas {s.grade} {s.class} &middot; NIS {s.nis}
+                                </span>
+                              </span>
+                              <span className="flex-none text-sm font-semibold text-link">
+                                Pilih
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <aside className="border-t-2 border-dashed border-line pt-6 lg:border-t-0 lg:border-l-2 lg:pt-1 lg:pl-8">
+            <h2 className="text-lg font-semibold">Siapkan sebelum mulai</h2>
+            <ul className="mt-3 space-y-3 text-sm leading-relaxed">
+              <li>
+                <span className="font-semibold text-heading">Nomor WhatsApp aktif</span>
+                <br />
+                <span className="text-muted">Untuk dihubungi pihak sekolah bila perlu.</span>
+              </li>
+              <li>
+                <span className="font-semibold text-heading">Kamera HP</span>
+                <br />
+                <span className="text-muted">
+                  Foto wajah orang tua/wali yang mengajukan, sebagai bukti pengajuan.
+                </span>
+              </li>
+              <li>
+                <span className="font-semibold text-heading">Surat dokter atau surat resmi</span>
+                <br />
+                <span className="text-muted">Opsional. PDF, JPG, atau PNG, maksimal 5MB.</span>
+              </li>
+            </ul>
+            <p className="mt-6 text-sm">
+              Sudah mengajukan?{" "}
+              <Link href="/lacak" className="link font-medium">
+                Lacak dengan kode tiket
+              </Link>
+            </p>
+          </aside>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }

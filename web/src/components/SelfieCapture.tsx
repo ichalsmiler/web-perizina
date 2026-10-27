@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+const noopSubscribe = () => () => {};
 
 type Props = {
   onCapture: (file: File | null) => void;
@@ -21,15 +23,12 @@ export default function SelfieCapture({ onCapture }: Props) {
   // Browser hanya mengizinkan kamera pada secure context (HTTPS/localhost).
   // Saat aplikasi diakses lewat http://<ip-lan>:3000, kamera mustahil dibuka,
   // jadi langsung sediakan jalur unggah foto agar form tetap bisa dikirim.
-  const [isInsecureContext, setIsInsecureContext] = useState(false);
-
-  useEffect(() => {
-    // Dihitung di client saja: window tidak ada saat render di server, dan
-    // menghitungnya langsung saat render membuat HTML server & client berbeda.
-    setIsInsecureContext(
-      !window.isSecureContext || !navigator.mediaDevices?.getUserMedia
-    );
-  }, []);
+  // Snapshot server selalu false agar HTML server & client sama; nilai asli dibaca setelah hidrasi.
+  const isInsecureContext = useSyncExternalStore(
+    noopSubscribe,
+    () => !window.isSecureContext || !navigator.mediaDevices?.getUserMedia,
+    () => false
+  );
 
   async function startCamera() {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -92,6 +91,10 @@ export default function SelfieCapture({ onCapture }: Props) {
   function retake() {
     setPreviewUrl(null);
     onCapture(null);
+    if (isInsecureContext) {
+      setStatus("idle");
+      return;
+    }
     startCamera();
   }
 
@@ -102,7 +105,7 @@ export default function SelfieCapture({ onCapture }: Props) {
           type="button"
           onClick={startCamera}
           disabled={status === "starting"}
-          className="flex items-center justify-center gap-2 border-2 border-secondary text-secondary rounded-md py-3.5 text-base font-medium hover:bg-secondary hover:text-white active:bg-secondary active:text-white transition-colors disabled:opacity-60"
+          className="btn btn-secondary w-full"
         >
           <svg
             width="20"
@@ -118,23 +121,21 @@ export default function SelfieCapture({ onCapture }: Props) {
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
             <circle cx="12" cy="13" r="4" />
           </svg>
-          {status === "starting"
-            ? "Membuka kamera..."
-            : "Aktifkan Kamera untuk Selfie"}
+          {status === "starting" ? "Membuka kamera..." : "Buka kamera depan"}
         </button>
       )}
 
       {status === "denied" && (
-        <div className="text-sm bg-danger/5 border border-danger/20 rounded-md p-4 flex flex-col gap-3">
-          <p className="text-danger font-medium">Kamera belum bisa diakses.</p>
-          <p className="text-neutral-dark leading-relaxed">
-            Ketuk ikon gembok/kamera di bilah alamat browser, pilih{" "}
+        <div role="alert" className="alert-bad flex flex-col gap-2">
+          <p className="font-semibold">Kamera belum bisa diakses.</p>
+          <p className="text-ink leading-relaxed">
+            Ketuk ikon gembok atau kamera di bilah alamat browser, pilih{" "}
             <strong>Izinkan kamera</strong>, lalu coba lagi.
           </p>
           <button
             type="button"
             onClick={startCamera}
-            className="self-start min-h-[44px] px-4 border border-secondary text-secondary rounded-md text-sm font-medium"
+            className="btn btn-sm btn-secondary self-start"
           >
             Coba lagi
           </button>
@@ -142,34 +143,39 @@ export default function SelfieCapture({ onCapture }: Props) {
       )}
 
       {isInsecureContext && status !== "captured" && (
-        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex flex-col gap-2">
-          <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
-            <span>📷</span> Unggah Foto Selfie / Orang Tua
+        <div className="bg-info-soft border border-link rounded p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-heading">
+            Ambil foto dengan aplikasi kamera HP
           </p>
-          <p className="text-xs text-amber-800 leading-relaxed">
-            Karena halaman diakses melalui jaringan lokal (HTTP), kamera langsung tidak diizinkan oleh browser HP demi keamanan. Silakan unggah foto selfie Anda melalui tombol di bawah:
+          <p className="text-sm leading-relaxed">
+            Halaman ini dibuka lewat jaringan lokal (HTTP), sehingga browser
+            tidak mengizinkan kamera langsung di halaman. Ketuk tombol di
+            bawah untuk memotret wajah Anda.
           </p>
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
-            capture="user"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const preview = URL.createObjectURL(file);
-                setPreviewUrl(preview);
-                onCapture(file);
-                setStatus("captured");
-              }
-            }}
-            className="mt-2 block w-full text-sm text-neutral-dark file:mr-3 file:py-2.5 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-white hover:file:bg-primary file:cursor-pointer border border-neutral-medium rounded-md bg-white p-1"
-          />
+          <label className="btn btn-primary self-start cursor-pointer focus-within:outline focus-within:outline-3 focus-within:outline-focus">
+            Ambil foto wajah
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              capture="user"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const preview = URL.createObjectURL(file);
+                  setPreviewUrl(preview);
+                  onCapture(file);
+                  setStatus("captured");
+                }
+              }}
+              className="sr-only"
+            />
+          </label>
         </div>
       )}
 
       <video
         ref={videoRef}
-        className={`w-full aspect-[3/4] sm:aspect-video object-cover rounded-md bg-neutral-dark ${
+        className={`w-full max-w-sm aspect-[3/4] object-cover rounded bg-chrome ${
           status === "streaming" ? "block" : "hidden"
         }`}
         style={{ transform: "scaleX(-1)" }}
@@ -180,28 +186,32 @@ export default function SelfieCapture({ onCapture }: Props) {
         <button
           type="button"
           onClick={capture}
-          className="bg-secondary text-white rounded-md py-3.5 text-base font-medium hover:bg-primary active:bg-primary transition-colors"
+          className="btn btn-primary w-full max-w-sm"
         >
-          Ambil Foto
+          Ambil foto
         </button>
       )}
 
       {status === "captured" && previewUrl && (
-        <div className="flex flex-col gap-2">
+        <div className="flex items-start gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={previewUrl}
-            alt="Pratinjau selfie verifikasi"
-            className="w-full rounded-md"
-            style={{ transform: "scaleX(-1)" }}
+            alt="Pratinjau foto verifikasi wajah"
+            className="w-28 aspect-[3/4] object-cover rounded border border-line"
+            style={{ transform: isInsecureContext ? undefined : "scaleX(-1)" }}
           />
-          <button
-            type="button"
-            onClick={retake}
-            className="self-start min-h-[44px] px-4 text-sm font-medium text-secondary hover:underline"
-          >
-            Ambil ulang
-          </button>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold text-ok-text">Foto tersimpan</p>
+            <p className="hint">Pastikan wajah terlihat jelas.</p>
+            <button
+              type="button"
+              onClick={retake}
+              className="btn btn-sm btn-secondary self-start"
+            >
+              Ambil ulang
+            </button>
+          </div>
         </div>
       )}
 

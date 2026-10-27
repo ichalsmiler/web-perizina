@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Link from "next/link";
 import SelfieCapture from "@/components/SelfieCapture";
 import {
   ALLOWED_DOCUMENT_TYPES,
@@ -24,6 +25,27 @@ type SubmitResult = {
   status: string;
 };
 
+function Section({
+  step,
+  title,
+  children,
+}: {
+  step: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="p-4 sm:p-6 border-t border-line first:border-t-0">
+      <legend className="sr-only">{title}</legend>
+      <h2 className="flex items-baseline gap-3 text-lg font-semibold mb-4" aria-hidden="true">
+        <span className="text-sm tabular-nums text-muted">{step}/4</span>
+        {title}
+      </h2>
+      {children}
+    </fieldset>
+  );
+}
+
 export default function LeaveRequestForm({ student }: Props) {
   const [parentName, setParentName] = useState("");
   const [parentWhatsapp, setParentWhatsapp] = useState("");
@@ -38,6 +60,7 @@ export default function LeaveRequestForm({ student }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -67,42 +90,38 @@ export default function LeaveRequestForm({ student }: Props) {
     setDocument(file);
   }
 
-  const isWhatsappValid = /^\d{9,12}$/.test(parentWhatsapp);
-  const isDateRangeValid = !!startDate && !!endDate && endDate >= startDate;
-  const isFormComplete =
-    !!parentName.trim() &&
-    isWhatsappValid &&
-    !!leaveType &&
-    isDateRangeValid &&
-    !!selfie &&
-    agreedToStatement;
+  function fail(message: string) {
+    setError(message);
+    // Pesan ada di bawah form panjang; arahkan pandangan ke sana.
+    requestAnimationFrame(() => errorRef.current?.focus());
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     if (!parentName.trim() || !parentWhatsapp.trim()) {
-      setError("Mohon lengkapi nama dan nomor WhatsApp orang tua/wali.");
+      fail("Lengkapi nama dan nomor WhatsApp orang tua/wali (bagian 1).");
       return;
     }
     if (!/^\d{9,12}$/.test(parentWhatsapp)) {
-      setError("Nomor WhatsApp harus berupa angka, 9-12 digit.");
+      fail("Nomor WhatsApp harus berupa angka, 9 sampai 12 digit (bagian 1).");
       return;
     }
     if (!leaveType || !startDate || !endDate) {
-      setError("Mohon lengkapi jenis izin dan rentang tanggal.");
+      fail("Pilih jenis izin dan isi tanggal mulai serta selesai (bagian 2).");
       return;
     }
     if (endDate < startDate) {
-      setError("Tanggal selesai tidak boleh sebelum tanggal mulai.");
+      fail("Tanggal selesai tidak boleh sebelum tanggal mulai (bagian 2).");
       return;
     }
     if (!selfie) {
-      setError("Selfie verifikasi wajib diambil sebelum mengirim.");
+      fail("Ambil foto verifikasi wajah sebelum mengirim (bagian 3).");
       return;
     }
     if (!agreedToStatement) {
-      setError("Mohon centang pernyataan sebelum mengirim pengajuan.");
+      fail("Centang pernyataan sebelum mengirim pengajuan (bagian 4).");
       return;
     }
 
@@ -125,61 +144,29 @@ export default function LeaveRequestForm({ student }: Props) {
       });
       const json = await res.json();
       if (!json.success) {
-        setError(json.error?.message ?? "Gagal mengirim pengajuan.");
+        fail(json.error?.message ?? "Gagal mengirim pengajuan.");
         return;
       }
       setResult(json.data);
+      window.scrollTo({ top: 0 });
     } catch {
-      setError(
-        "Submission failed. Please check your internet connection and try again."
-      );
+      fail("Pengajuan gagal terkirim. Periksa koneksi internet, lalu coba lagi.");
     } finally {
       setSubmitting(false);
     }
   }
 
   if (result) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm p-6 text-center">
-        <p className="text-success text-3xl mb-2">&#10003;</p>
-        <h2 className="font-semibold text-lg mb-1">Pengajuan Terkirim</h2>
-        <p className="text-sm text-neutral-medium mb-4">
-          Izin untuk {result.studentName} telah diajukan dengan status{" "}
-          <strong>Pending</strong>.
-        </p>
-        <div className="bg-neutral-light rounded-md p-4 mb-4">
-          <p className="text-xs text-neutral-medium mb-1">Kode Tiket Anda</p>
-          <p className="font-mono text-xl font-semibold text-primary">
-            {result.ticketCode}
-          </p>
-        </div>
-        <p className="text-xs text-neutral-medium mb-4">
-          Simpan kode ini untuk melacak status pengajuan. Tanpa kode ini,
-          status tidak dapat diakses kembali.
-        </p>
-        <a
-          href={`/lacak?ticketCode=${encodeURIComponent(result.ticketCode)}`}
-          className="inline-block bg-primary text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-neutral-dark transition-colors"
-        >
-          Lacak Status Sekarang
-        </a>
-      </div>
-    );
+    return <TicketSlip result={result} />;
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white rounded-lg shadow-sm p-6 flex flex-col gap-5"
-    >
-      <div className="border-b border-neutral-light pb-5">
-        <p className="text-xs text-neutral-medium mb-3">
-          Data Orang Tua/Wali yang Mengajukan
-        </p>
+    <form onSubmit={handleSubmit} noValidate className="card">
+      <Section step={1} title="Data orang tua/wali">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="parent-name" className="text-sm font-medium block mb-1">
-              Nama Orang Tua/Wali
+            <label htmlFor="parent-name" className="label">
+              Nama orang tua/wali
             </label>
             <input
               id="parent-name"
@@ -187,12 +174,12 @@ export default function LeaveRequestForm({ student }: Props) {
               autoComplete="name"
               value={parentName}
               onChange={(e) => setParentName(e.target.value)}
-              placeholder="Nama lengkap"
-              className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
+              placeholder="Nama lengkap Anda"
+              className="field"
             />
           </div>
           <div>
-            <label htmlFor="parent-wa" className="text-sm font-medium block mb-1">
+            <label htmlFor="parent-wa" className="label">
               Nomor WhatsApp
             </label>
             <input
@@ -207,195 +194,270 @@ export default function LeaveRequestForm({ student }: Props) {
                 setParentWhatsapp(e.target.value.replace(/\D/g, "").slice(0, 12))
               }
               placeholder="08xxxxxxxxxx"
-              className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
+              aria-describedby="parent-wa-hint"
+              className="field font-mono"
             />
+            <p id="parent-wa-hint" className="hint mt-1">
+              Angka saja, 9 sampai 12 digit.
+            </p>
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <label htmlFor="leave-type" className="text-sm font-medium block mb-1">
-          Jenis Izin
-        </label>
-        <select
-          id="leave-type"
-          value={leaveType}
-          onChange={(e) => setLeaveType(e.target.value)}
-          className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
-        >
-          <option value="">Pilih jenis izin</option>
-          {LEAVE_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="start-date" className="text-sm font-medium block mb-1">
-            Tanggal Mulai
-          </label>
-          <input
-            id="start-date"
-            type="date"
-            min={today}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
-          />
-        </div>
-        <div>
-          <label htmlFor="end-date" className="text-sm font-medium block mb-1">
-            Tanggal Selesai
-          </label>
-          <input
-            id="end-date"
-            type="date"
-            min={startDate || today}
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-full border border-neutral-medium rounded-md px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-secondary"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="reason" className="text-sm font-medium block mb-1">
-          Catatan{" "}
-          <span className="font-normal text-neutral-medium">(opsional)</span>
-        </label>
-        <textarea
-          id="reason"
-          value={reason}
-          maxLength={500}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          placeholder="Keterangan tambahan bila perlu"
-          className="w-full border border-neutral-medium rounded-md px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-secondary"
-        />
-      </div>
-
-      <div>
-        <label className="text-sm font-medium block mb-1">
-          Dokumen Pendukung{" "}
-          <span className="font-normal text-neutral-medium">(opsional)</span>
-        </label>
-        <p className="text-xs text-neutral-medium mb-2">
-          Contoh: surat keterangan dokter atau surat resmi. Format PDF, JPG,
-          atau PNG — ukuran maksimal 5MB.
-        </p>
-
-        {!document ? (
-          <>
-            <label
-              htmlFor="dokumen-pendukung"
-              className="flex flex-col items-center justify-center gap-2 w-full border-2 border-dashed border-neutral-medium rounded-lg px-4 py-6 cursor-pointer text-center hover:border-secondary hover:bg-neutral-light/50 transition-colors"
-            >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-secondary"
-                aria-hidden="true"
+      <Section step={2} title="Jenis dan tanggal izin">
+        <div role="radiogroup" aria-labelledby="leave-type-label">
+          <p id="leave-type-label" className="label">
+            Jenis izin
+          </p>
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+            {LEAVE_TYPES.map((t) => (
+              <label
+                key={t.value}
+                className={`flex items-center gap-3 min-h-[48px] px-3 rounded border cursor-pointer transition-colors ${
+                  leaveType === t.value
+                    ? "border-brand bg-sunken font-semibold text-heading"
+                    : "border-field hover:bg-sunken"
+                }`}
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              <span className="text-sm font-medium text-primary">
-                Ketuk untuk pilih file
-              </span>
-              <span className="text-xs text-neutral-medium">
-                PDF, JPG, atau PNG · maks 5MB
-              </span>
+                <input
+                  type="radio"
+                  name="leave-type"
+                  value={t.value}
+                  checked={leaveType === t.value}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  className="w-5 h-5 flex-none accent-[var(--brand)]"
+                />
+                {t.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 mt-5">
+          <div>
+            <label htmlFor="start-date" className="label">
+              Tanggal mulai
             </label>
             <input
-              id="dokumen-pendukung"
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              onChange={handleDocumentChange}
-              className="sr-only"
+              id="start-date"
+              type="date"
+              min={today}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="field"
             />
-          </>
-        ) : (
-          <div className="flex items-center gap-3 w-full border border-neutral-medium rounded-lg px-3 py-3 bg-neutral-light/60">
-            <span
-              className="flex-none w-10 h-10 rounded-md bg-white border border-neutral-medium grid place-items-center text-[10px] font-semibold text-primary"
-              aria-hidden="true"
-            >
-              {document.type === "application/pdf" ? "PDF" : "IMG"}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-primary truncate">
-                {document.name}
-              </span>
-              <span className="block text-xs text-neutral-medium">
-                {formatFileSize(document.size)} · siap dikirim
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setDocument(null);
-                setDocumentError(null);
-              }}
-              className="flex-none text-xs font-medium text-danger border border-danger/40 rounded-md px-3 py-2 hover:bg-danger hover:text-white transition-colors"
-            >
-              Hapus
-            </button>
           </div>
-        )}
+          <div>
+            <label htmlFor="end-date" className="label">
+              Tanggal selesai
+            </label>
+            <input
+              id="end-date"
+              type="date"
+              min={startDate || today}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="field"
+            />
+          </div>
+        </div>
 
-        {documentError && (
-          <p className="text-xs text-danger mt-2">{documentError}</p>
-        )}
-      </div>
+        <div className="mt-5">
+          <label htmlFor="reason" className="label">
+            Catatan <span className="font-normal text-muted">(opsional)</span>
+          </label>
+          <textarea
+            id="reason"
+            value={reason}
+            maxLength={500}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="Misalnya: demam sejak semalam, kontrol ke dokter"
+            className="field"
+          />
+          <p className="hint mt-1 text-right">{reason.length}/500</p>
+        </div>
+      </Section>
 
-      <div>
-        <label className="text-sm font-medium block mb-1">
-          Foto Verifikasi <span className="text-danger">*wajib</span>
+      <Section step={3} title="Dokumen dan foto">
+        <div>
+          <p className="label">
+            Dokumen pendukung{" "}
+            <span className="font-normal text-muted">(opsional)</span>
+          </p>
+          <p className="hint mb-2">
+            Surat keterangan dokter atau surat resmi. PDF, JPG, atau PNG,
+            maksimal 5MB.
+          </p>
+
+          {!document ? (
+            <>
+              <label
+                htmlFor="dokumen-pendukung"
+                className="flex flex-col items-center justify-center gap-1 w-full border-2 border-dashed border-field rounded px-4 py-6 cursor-pointer text-center hover:bg-sunken transition-colors focus-within:outline focus-within:outline-3 focus-within:outline-focus"
+              >
+                <span className="text-sm font-semibold text-link">
+                  Pilih file dokumen
+                </span>
+                <span className="hint">Ketuk untuk membuka galeri atau file</span>
+              </label>
+              <input
+                id="dokumen-pendukung"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                onChange={handleDocumentChange}
+                className="sr-only"
+              />
+            </>
+          ) : (
+            <div className="flex items-center gap-3 w-full border border-field rounded px-3 py-3 bg-sunken">
+              <span
+                className="flex-none w-11 h-11 rounded bg-surface border border-line grid place-items-center text-[11px] font-mono font-semibold text-heading"
+                aria-hidden="true"
+              >
+                {document.type === "application/pdf" ? "PDF" : "IMG"}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-heading truncate">
+                  {document.name}
+                </span>
+                <span className="block hint">
+                  {formatFileSize(document.size)}, siap dikirim
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocument(null);
+                  setDocumentError(null);
+                }}
+                className="btn btn-sm btn-bad-outline flex-none"
+              >
+                Hapus
+              </button>
+            </div>
+          )}
+
+          {documentError && (
+            <p role="alert" className="alert-bad mt-2">
+              {documentError}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6">
+          <p className="label">
+            Foto verifikasi wajah <span className="text-bad-text">(wajib)</span>
+          </p>
+          <p className="hint mb-2">
+            Foto wajah orang tua/wali yang mengajukan. Dipakai sekolah untuk
+            memastikan pengajuan ini benar dari Anda.
+          </p>
+          <SelfieCapture onCapture={setSelfie} />
+        </div>
+      </Section>
+
+      <Section step={4} title="Pernyataan dan kirim">
+        <label className="flex items-start gap-3 text-sm bg-sunken border border-line rounded p-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={agreedToStatement}
+            onChange={(e) => setAgreedToStatement(e.target.checked)}
+            className="mt-0.5 flex-none w-5 h-5 accent-[var(--brand)]"
+          />
+          <span className="leading-relaxed">
+            Saya menyatakan dengan sebenar-benarnya bahwa anak saya{" "}
+            <strong className="text-heading">{student.fullName}</strong>{" "}
+            berhalangan mengikuti kegiatan belajar sekolah karena alasan di
+            atas. Data yang saya isikan sah dan dapat dipertanggungjawabkan.
+          </span>
         </label>
-        <p className="text-xs text-neutral-medium mb-2">
-          Foto wajah orang tua/wali sebagai bukti pengajuan.
+
+        {error && (
+          <p
+            ref={errorRef}
+            tabIndex={-1}
+            role="alert"
+            className="alert-bad mt-4"
+          >
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="btn btn-primary w-full mt-4 min-h-[52px]"
+        >
+          {submitting ? "Mengirim pengajuan..." : "Kirim pengajuan izin"}
+        </button>
+      </Section>
+    </form>
+  );
+}
+
+function TicketSlip({ result }: { result: SubmitResult }) {
+  const [copied, setCopied] = useState<"idle" | "ok" | "manual">("idle");
+  const codeRef = useRef<HTMLInputElement>(null);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(result.ticketCode);
+      setCopied("ok");
+    } catch {
+      // Clipboard API butuh HTTPS; di HTTP lokal pilih teksnya agar bisa disalin manual.
+      codeRef.current?.select();
+      setCopied("manual");
+    }
+  }
+
+  return (
+    <div className="card overflow-hidden" role="status">
+      <div className="p-5 sm:p-6">
+        <h2 className="text-xl font-semibold">Pengajuan terkirim</h2>
+        <p className="mt-2 text-sm leading-relaxed">
+          Izin untuk <strong className="text-heading">{result.studentName}</strong>{" "}
+          sudah diterima sekolah dan menunggu persetujuan admin.
         </p>
-        <SelfieCapture onCapture={setSelfie} />
       </div>
 
-      <label className="flex items-start gap-3 text-xs text-neutral-dark bg-neutral-light rounded-md p-4 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={agreedToStatement}
-          onChange={(e) => setAgreedToStatement(e.target.checked)}
-          className="mt-0.5 flex-none w-5 h-5"
-        />
-        <span className="leading-relaxed">
-          Saya menyatakan dengan sebenar-benarnya bahwa anak saya tersebut di
-          atas berhalangan mengikuti kegiatan belajar sekolah dikarenakan
-          alasan tersebut. Data yang diisikan adalah sah dan dapat
-          dipertanggungjawabkan.
-        </span>
-      </label>
+      <div className="tear" aria-hidden="true" />
 
-      {error && (
-        <p className="text-sm text-danger bg-danger/5 border border-danger/20 rounded-md px-3 py-2.5">
-          {error}
+      <div className="p-5 sm:p-6 bg-sunken">
+        <label htmlFor="ticket-code" className="label">
+          Kode tiket Anda
+        </label>
+        <div className="flex flex-col min-[420px]:flex-row gap-2">
+          <input
+            id="ticket-code"
+            ref={codeRef}
+            readOnly
+            value={result.ticketCode}
+            onFocus={(e) => e.target.select()}
+            className="field font-mono text-xl font-semibold tracking-wide text-heading min-[420px]:flex-1"
+          />
+          <button type="button" onClick={copyCode} className="btn btn-secondary">
+            {copied === "ok" ? "Tersalin" : "Salin kode"}
+          </button>
+        </div>
+        <p className="hint mt-2" aria-live="polite">
+          {copied === "manual"
+            ? "Browser tidak mengizinkan salin otomatis. Kode sudah dipilih, tekan lama lalu pilih Salin."
+            : "Simpan kode ini, misalnya dengan tangkapan layar. Tanpa kode, status pengajuan tidak bisa dibuka lagi."}
         </p>
-      )}
 
-      <button
-        type="submit"
-        disabled={submitting || !isFormComplete}
-        className="bg-primary text-white rounded-md py-3.5 text-base font-medium hover:bg-neutral-dark active:bg-neutral-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {submitting ? "Mengirim..." : "Kirim Pengajuan"}
-      </button>
-    </form>
+        <div className="mt-5 flex flex-col sm:flex-row gap-3">
+          <a
+            href={`/lacak?ticketCode=${encodeURIComponent(result.ticketCode)}`}
+            className="btn btn-primary"
+          >
+            Lacak status pengajuan
+          </a>
+          <Link href="/" className="btn btn-secondary">
+            Ajukan untuk siswa lain
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }

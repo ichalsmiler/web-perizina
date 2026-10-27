@@ -14,20 +14,37 @@ type Student = {
   isActive: boolean;
 };
 
+function ActiveLabel({ active }: { active: boolean }) {
+  return active ? (
+    <span className="text-sm font-medium text-ok-text">Aktif</span>
+  ) : (
+    <span className="text-sm font-medium text-muted">Nonaktif</span>
+  );
+}
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams();
     if (query) params.set("query", query);
     params.set("limit", "50");
-    const res = await fetch(`/api/admin/students?${params.toString()}`);
-    const json = await res.json();
-    if (json.success) setStudents(json.data);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/admin/students?${params.toString()}`);
+      const json = await res.json();
+      if (!json.success) throw new Error();
+      setStudents(json.data);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [query]);
 
   useEffect(() => {
@@ -35,115 +52,188 @@ export default function StudentsPage() {
     load();
   }, [load]);
 
-  async function handleDeactivate(id: string) {
-    if (!confirm("Nonaktifkan siswa ini? Data historis tetap tersimpan.")) return;
-    await fetch(`/api/admin/students/${id}`, { method: "DELETE" });
+  async function handleDeactivate(s: Student) {
+    if (!confirm(`Nonaktifkan ${s.fullName}? Riwayat izinnya tetap tersimpan.`)) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/students/${s.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!json.success) {
+        setActionError(json.error?.message ?? "Gagal menonaktifkan siswa.");
+        return;
+      }
+    } catch {
+      setActionError("Gagal terhubung ke server.");
+      return;
+    }
     load();
+  }
+
+  function contact(s: Student) {
+    if (!s.parentName && !s.parentPhone) {
+      return <span className="text-muted">Belum diisi</span>;
+    }
+    return (
+      <>
+        {s.parentName ?? "Nama belum diisi"}
+        {s.parentPhone && <span className="block font-mono text-muted">{s.parentPhone}</span>}
+      </>
+    );
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Data Siswa</h1>
-        <div className="flex gap-2">
-          <Link
-            href="/admin/students/bulk-upload"
-            className="text-sm bg-white border border-neutral-medium rounded-md px-3 py-1.5 hover:bg-neutral-light transition-colors"
-          >
-            Upload Excel
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-semibold">Data siswa</h1>
+          <p className="text-sm text-muted mt-1">
+            Hanya siswa aktif yang bisa dicari orang tua di halaman pengajuan.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/students/bulk-upload" className="btn btn-sm btn-secondary">
+            Impor dari Excel
           </Link>
-          <Link
-            href="/admin/students/new"
-            className="text-sm bg-primary text-white rounded-md px-3 py-1.5 hover:bg-neutral-dark transition-colors"
-          >
-            + Tambah Siswa
+          <Link href="/admin/students/new" className="btn btn-sm btn-primary">
+            Tambah siswa
           </Link>
         </div>
       </div>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Cari nama atau NIS..."
-        className="border border-neutral-medium rounded-md px-3 py-2 text-sm mb-4 w-full max-w-sm"
-      />
+      <div className="mb-4 max-w-md">
+        <label htmlFor="s-query" className="label">
+          Cari siswa
+        </label>
+        <input
+          id="s-query"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Nama atau NIS"
+          className="field"
+        />
+      </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-neutral-medium border-b border-neutral-light">
-              <th className="p-3">NIS</th>
-              <th className="p-3">Nama</th>
-              <th className="p-3">Kelas</th>
-              <th className="p-3">Kontak Ortu</th>
-              <th className="p-3">Status</th>
-              <th className="p-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="p-4 text-neutral-medium" colSpan={6}>
-                  Memuat...
-                </td>
-              </tr>
-            ) : students.length === 0 ? (
-              <tr>
-                <td className="p-4 text-neutral-medium" colSpan={6}>
-                  Tidak ada data siswa. Klik &quot;Tambah Siswa&quot; untuk memulai.
-                </td>
-              </tr>
+      {actionError && (
+        <p role="alert" className="alert-bad mb-3">
+          {actionError}
+        </p>
+      )}
+
+      <div aria-live="polite" aria-busy={loading}>
+        {loading ? (
+          <p className="card p-5 text-muted">Memuat data siswa...</p>
+        ) : loadError ? (
+          <div role="alert" className="alert-bad flex flex-wrap items-center justify-between gap-3">
+            <span>Data siswa gagal dimuat. Periksa koneksi ke server.</span>
+            <button type="button" onClick={load} className="btn btn-sm btn-secondary">
+              Muat ulang
+            </button>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="card p-5">
+            {query ? (
+              <p className="font-medium">Tidak ada siswa dengan nama atau NIS &ldquo;{query}&rdquo;.</p>
             ) : (
-              students.map((s) => (
-                <tr key={s.id} className="border-b border-neutral-light last:border-0">
-                  <td className="p-3 font-mono text-xs">{s.nis}</td>
-                  <td className="p-3 font-medium">{s.fullName}</td>
-                  <td className="p-3">
-                    {s.grade} {s.class}
-                  </td>
-                  <td className="p-3 text-xs">
-                    {s.parentName ? (
-                      <>
-                        {s.parentName}
-                        <br />
-                        {s.parentPhone}
-                      </>
-                    ) : (
-                      <span className="text-neutral-medium">Belum diisi</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full font-medium ${
-                        s.isActive
-                          ? "bg-success/10 text-success"
-                          : "bg-neutral-medium/20 text-neutral-medium"
-                      }`}
-                    >
-                      {s.isActive ? "Aktif" : "Nonaktif"}
+              <>
+                <p className="font-medium">Belum ada data siswa.</p>
+                <p className="hint mt-1">
+                  Tambahkan satu per satu, atau impor sekaligus dari file Excel.
+                </p>
+              </>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="card hidden md:block overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-sunken text-left text-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">Nama</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">NIS</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Kelas</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Kontak orang tua</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+                    <th scope="col" className="px-4 py-3">
+                      <span className="sr-only">Aksi</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {students.map((s) => (
+                    <tr key={s.id}>
+                      <td className="px-4 py-3 font-semibold text-heading">{s.fullName}</td>
+                      <td className="px-4 py-3 font-mono">{s.nis}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {s.grade} {s.class}
+                      </td>
+                      <td className="px-4 py-3">{contact(s)}</td>
+                      <td className="px-4 py-3">
+                        <ActiveLabel active={s.isActive} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/admin/students/${s.id}/edit`}
+                            className="btn btn-sm btn-secondary"
+                            aria-label={`Ubah data ${s.fullName}`}
+                          >
+                            Ubah
+                          </Link>
+                          {s.isActive && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeactivate(s)}
+                              className="btn btn-sm btn-bad-outline"
+                              aria-label={`Nonaktifkan ${s.fullName}`}
+                            >
+                              Nonaktifkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="md:hidden flex flex-col gap-2">
+              {students.map((s) => (
+                <li key={s.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-heading">{s.fullName}</span>
+                      <span className="block text-sm text-muted">
+                        Kelas {s.grade} {s.class} &middot; <span className="font-mono">{s.nis}</span>
+                      </span>
                     </span>
-                  </td>
-                  <td className="p-3 text-right whitespace-nowrap">
+                    <ActiveLabel active={s.isActive} />
+                  </div>
+                  <div className="text-sm mt-2">{contact(s)}</div>
+                  <div className="flex gap-2 mt-3">
                     <Link
                       href={`/admin/students/${s.id}/edit`}
-                      className="text-secondary hover:underline text-xs mr-3"
+                      className="btn btn-sm btn-secondary flex-1"
+                      aria-label={`Ubah data ${s.fullName}`}
                     >
-                      Edit
+                      Ubah
                     </Link>
                     {s.isActive && (
                       <button
-                        onClick={() => handleDeactivate(s.id)}
-                        className="text-danger hover:underline text-xs"
+                        type="button"
+                        onClick={() => handleDeactivate(s)}
+                        className="btn btn-sm btn-bad-outline flex-1"
+                        aria-label={`Nonaktifkan ${s.fullName}`}
                       >
                         Nonaktifkan
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
     </div>
   );

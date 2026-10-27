@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth";
 import LogoutButton from "@/components/LogoutButton";
+import AdminNav from "@/components/AdminNav";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function AdminDashboardLayout({
   children,
@@ -15,24 +17,34 @@ export default async function AdminDashboardLayout({
 
   return (
     <div className="flex-1 flex flex-col">
-      <header className="bg-primary text-white">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <nav className="flex items-center gap-6">
-            <span className="font-semibold">IzinSiswa Admin</span>
-            <Link href="/admin/dashboard" className="text-sm hover:underline">
-              Permohonan Izin
-            </Link>
-            <Link href="/admin/students" className="text-sm hover:underline">
-              Data Siswa
-            </Link>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-neutral-light">{session.fullName}</span>
+      <header className="bg-chrome text-on-chrome">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row sm:items-center sm:gap-6">
+          <Link
+            href="/admin/dashboard"
+            className="font-heading font-semibold text-lg min-h-[48px] inline-flex items-center self-start sm:self-auto"
+          >
+            IzinSiswa
+            <span className="ml-2 text-sm font-sans font-medium opacity-85">Admin</span>
+          </Link>
+          {/* Di HP: nama admin, tema, dan keluar dalam satu baris ringkas di atas menu. */}
+          <div className="flex sm:hidden items-center justify-between gap-1">
+            <span className="text-sm opacity-85 truncate">{session.fullName}</span>
+            <span className="flex items-center">
+              <ThemeToggle className="hover:bg-white/10" />
+              <LogoutButton />
+            </span>
+          </div>
+          <div className="-mx-4 sm:mx-0 border-t border-white/15 sm:border-0">
+            <AdminNav />
+          </div>
+          <div className="hidden sm:flex sm:ml-auto items-center gap-1">
+            <span className="text-sm opacity-85 px-2">{session.fullName}</span>
+            <ThemeToggle className="hover:bg-white/10" />
             <LogoutButton />
           </div>
         </div>
       </header>
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8">{children}</main>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-8">{children}</main>
     </div>
   );
 }

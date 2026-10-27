@@ -1,65 +1,300 @@
 @import "tailwindcss";
 
+/* Palet dari DESIGN.md. Hue asli dipertahankan, tetapi warna teks digelapkan
+   agar lolos WCAG AA (silver #BDC3C7 hanya 1.78:1 di atas putih, sky blue
+   #3498DB 3.15:1). Silver tetap dipakai untuk garis pemisah, bukan teks. */
 :root {
-  --color-primary: #2c3e50; /* Deep Navy */
-  --color-secondary: #3498db; /* Sky Blue */
-  --color-success: #2ecc71; /* Emerald Green */
-  --color-danger: #e74c3c; /* Alizarin Red */
-  --color-neutral-light: #ecf0f1;
-  --color-neutral-medium: #bdc3c7;
-  --color-neutral-dark: #34495e;
-  --color-white: #ffffff;
+  --canvas: #ecf0f1; /* Cloud Gray */
+  --surface: #ffffff;
+  --sunken: #f5f7f8;
+  --ink: #34495e; /* Wet Asphalt */
+  --heading: #2c3e50; /* Deep Navy */
+  --muted: #5d6d7e; /* 5.31:1 di putih, 4.63:1 di canvas */
+  --line: #d5dbdf;
+  --field: #7f8c8d; /* batas input 3.48:1 */
+  --brand: #2c3e50;
+  --brand-hover: #34495e;
+  --on-brand: #ffffff;
+  --chrome: #2c3e50;
+  --on-chrome: #ffffff;
+  --link: #1f6fa8; /* Sky Blue digelapkan: 5.39:1 */
+  --focus: #3498db; /* Sky Blue asli, 3.15:1 untuk cincin fokus */
+  --info-soft: #eaf3fb;
+  --ok: #1e8449;
+  --ok-text: #196f3d;
+  --on-ok: #ffffff;
+  --ok-soft: #e8f6ee;
+  --bad: #c0392b;
+  --bad-text: #c0392b;
+  --on-bad: #ffffff;
+  --bad-soft: #fbedeb;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #151e27;
+    --surface: #1e2a36;
+    --sunken: #253341;
+    --ink: #ecf0f1;
+    --heading: #ffffff;
+    --muted: #a9b4be;
+    --line: #34495e;
+    --field: #6b7f92;
+    --brand: #ecf0f1;
+    --brand-hover: #ffffff;
+    --on-brand: #2c3e50;
+    --chrome: #0f1720;
+    --on-chrome: #ecf0f1;
+    --link: #7fb8e6;
+    --focus: #5dade2;
+    --info-soft: #1d3347;
+    --ok: #58d68d;
+    --ok-text: #58d68d;
+    --on-ok: #10241a;
+    --ok-soft: #1b3a2a;
+    --bad: #f1948a;
+    --bad-text: #f1948a;
+    --on-bad: #1a0d0b;
+    --bad-soft: #3d2220;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #151e27;
+  --surface: #1e2a36;
+  --sunken: #253341;
+  --ink: #ecf0f1;
+  --heading: #ffffff;
+  --muted: #a9b4be;
+  --line: #34495e;
+  --field: #6b7f92;
+  --brand: #ecf0f1;
+  --brand-hover: #ffffff;
+  --on-brand: #2c3e50;
+  --chrome: #0f1720;
+  --on-chrome: #ecf0f1;
+  --link: #7fb8e6;
+  --focus: #5dade2;
+  --info-soft: #1d3347;
+  --ok: #58d68d;
+  --ok-text: #58d68d;
+  --on-ok: #10241a;
+  --ok-soft: #1b3a2a;
+  --bad: #f1948a;
+  --bad-text: #f1948a;
+  --on-bad: #1a0d0b;
+  --bad-soft: #3d2220;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-primary: var(--color-primary);
-  --color-secondary: var(--color-secondary);
-  --color-success: var(--color-success);
-  --color-danger: var(--color-danger);
-  --color-neutral-light: var(--color-neutral-light);
-  --color-neutral-medium: var(--color-neutral-medium);
-  --color-neutral-dark: var(--color-neutral-dark);
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-poppins);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-heading: var(--heading);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-field: var(--field);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-chrome: var(--chrome);
+  --color-on-chrome: var(--on-chrome);
+  --color-link: var(--link);
+  --color-focus: var(--focus);
+  --color-info-soft: var(--info-soft);
+  --color-ok: var(--ok);
+  --color-ok-text: var(--ok-text);
+  --color-on-ok: var(--on-ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-bad: var(--bad);
+  --color-bad-text: var(--bad-text);
+  --color-on-bad: var(--on-bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-heading: var(--font-poppins), var(--font-inter), sans-serif;
+  /* Kode tiket memakai monospace agar 0/O dan 1/I mudah dibedakan saat dibaca ulang. */
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-poppins), sans-serif;
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  overscroll-behavior-y: contain;
 }
 
-/* ---------- Optimasi untuk browser HP ---------- */
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  color: var(--heading);
+}
 
-/* iOS Safari memperbesar halaman otomatis saat fokus ke input ber-font < 16px.
-   Menetapkan 16px mencegah zoom paksa yang membuat form terasa "melompat". */
+/* Fokus keyboard selalu terlihat, di kedua tema. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+/* Di atas bilah navy, cincin biru terlalu samar; pakai warna teks bilah. */
+.bg-chrome :focus-visible {
+  outline-color: var(--on-chrome);
+}
+
+/* iOS Safari memperbesar halaman otomatis saat fokus ke input ber-font < 16px. */
 input,
 select,
 textarea {
   font-size: 16px;
 }
 
-/* Target sentuh minimal 44px (pedoman Apple HIG / Material). */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-select,
-textarea,
-button {
-  min-height: 44px;
-}
-
-textarea {
-  min-height: 88px;
-}
-
-/* Hilangkan kotak highlight biru bawaan saat elemen disentuh di Android. */
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Cegah bounce/scroll-chaining yang membingungkan di dalam form panjang. */
-body {
-  overscroll-behavior-y: contain;
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 
-/* Checkbox lebih besar dan mudah disentuh, warna mengikuti tema. */
-input[type="checkbox"] {
-  accent-color: var(--color-secondary);
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  .hint {
+    font-size: 0.8125rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .field {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid var(--field);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .field::placeholder {
+    color: var(--muted);
+  }
+  textarea.field {
+    min-height: 96px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 1rem;
+    border: 1px solid transparent;
+    transition: background-color 150ms ease-in-out, color 150ms ease-in-out,
+      border-color 150ms ease-in-out;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-sm {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 0.875rem;
+  }
+  .btn-primary {
+    background: var(--brand);
+    color: var(--on-brand);
+  }
+  .btn-primary:not(:disabled):hover {
+    background: var(--brand-hover);
+  }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--field);
+  }
+  .btn-secondary:not(:disabled):hover {
+    background: var(--sunken);
+  }
+  .btn-ok {
+    background: var(--ok);
+    color: var(--on-ok);
+  }
+  .btn-bad {
+    background: var(--bad);
+    color: var(--on-bad);
+  }
+  .btn-bad-outline {
+    background: var(--surface);
+    color: var(--bad-text);
+    border-color: var(--bad);
+  }
+  .btn-bad-outline:not(:disabled):hover {
+    background: var(--bad-soft);
+  }
+
+  .link {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .alert-bad {
+    background: var(--bad-soft);
+    color: var(--bad-text);
+    border: 1px solid var(--bad);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 0.875rem;
+  }
+
+  /* Motif identitas: garis sobek slip izin. Memisahkan "isi surat" dari
+     "potongan" yang disimpan orang tua (kode tiket, status). */
+  .tear {
+    position: relative;
+    border-top: 2px dashed var(--line);
+    margin: 0 -1px;
+  }
+  .tear::before,
+  .tear::after {
+    content: "";
+    position: absolute;
+    top: -14px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--canvas);
+    border: 1px solid var(--line);
+  }
+  .tear::before {
+    left: -14px;
+    clip-path: inset(0 0 0 50%);
+  }
+  .tear::after {
+    right: -14px;
+    clip-path: inset(0 50% 0 0);
+  }
 }

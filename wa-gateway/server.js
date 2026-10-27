@@ -23,6 +23,7 @@ import express from 'express';
 import cron from 'node-cron';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
@@ -49,9 +50,12 @@ const IZIN_API_TOKEN = process.env.IZIN_API_TOKEN || '';
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const LAST_SENT_FILE = path.join(__dirname, 'last_sent.json');
 
+const QR_SMALL = String(process.env.QR_SMALL || 'true') !== 'false';
+
 let sock = null;
 let connected = false;
 let reconnectTimer = null;
+let latestQr = null;
 
 // ---------- Koneksi WhatsApp (Baileys) ----------
 async function connect() {
@@ -77,9 +81,14 @@ async function connect() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
+      latestQr = qr;
       console.log('\n=== SCAN QR INI DENGAN NOMOR WA BOT ===');
-      qrcode.generate(qr, { small: true });
-      console.log('WhatsApp > Perangkat Tertaut > Tautkan Perangkat\n');
+      // Mode kecil bisa tampil gepeng di sebagian terminal SSH. Mode besar
+      // (QR_SMALL=false) butuh ±110 kolom dan memakai kode warna ANSI yang oleh
+      // journalctl ditampilkan sebagai "blob data"; halaman /qr lebih andal.
+      qrcode.generate(qr, { small: QR_SMALL });
+      console.log('WhatsApp > Perangkat Tertaut > Tautkan Perangkat');
+      console.log(`Kalau QR di atas sulit di-scan, buka http://127.0.0.1:${PORT}/qr (lihat README)\n`);
     }
     if (connection === 'close') {
       connected = false;
@@ -96,6 +105,7 @@ async function connect() {
       reconnectTimer = setTimeout(connect, 5000);
     } else if (connection === 'open') {
       connected = true;
+      latestQr = null;
       console.log('WhatsApp bot terhubung sebagai:', sock.user?.id);
     }
   });
@@ -202,6 +212,30 @@ function cekApiKey(req, res, next) {
 
 app.get('/status', (req, res) => {
   res.json({ ok: true, connected, group: GROUP_JID || null, cron: CRON_SCHEDULE, timezone: TIMEZONE });
+});
+
+// QR sebagai gambar, untuk dibuka di browser lewat tunnel SSH (lihat README).
+// Tanpa API key: gateway hanya dengar di 127.0.0.1, jadi hanya bisa dibuka dari
+// server ini atau lewat tunnel SSH, yang sudah butuh login ke server.
+app.get('/qr', async (req, res) => {
+  const page = (body, refreshSec) => `<!doctype html><html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="${refreshSec}"><title>QR bot WhatsApp</title>
+<style>body{font-family:system-ui,sans-serif;background:#ecf0f1;color:#2c3e50;margin:0;padding:24px;text-align:center}
+img{background:#fff;padding:12px;border:1px solid #bdc3c7;width:min(360px,90vw);height:auto}</style></head>
+<body>${body}</body></html>`;
+  res.set('Cache-Control', 'no-store');
+  if (connected) {
+    return res.send(page(`<h1>Bot sudah terhubung</h1><p>${sock?.user?.id ?? ''}</p><p>Halaman ini boleh ditutup.</p>`, 30));
+  }
+  if (!latestQr) {
+    return res.send(page('<h1>Menunggu QR dari WhatsApp...</h1><p>Halaman memuat ulang sendiri.</p>', 3));
+  }
+  const png = await QRCode.toDataURL(latestQr, { margin: 2, width: 360 });
+  res.send(page(`<h1>Scan dengan nomor WA bot</h1>
+<p>WhatsApp &gt; Perangkat tertaut &gt; Tautkan perangkat</p>
+<img src="${png}" alt="QR untuk menautkan bot WhatsApp">
+<p>QR diganti otomatis tiap beberapa detik; halaman ini ikut memuat ulang.</p>`, 10));
 });
 
 // Lihat daftar grup yang diikuti bot, untuk menemukan GROUP_JID yang benar.

@@ -44,7 +44,23 @@ memperbarui gateway; `WA_GATEWAY=1` tidak perlu ditulis lagi.
 
 Setelah terpasang:
 
-1. Scan QR dengan nomor WA bot (WhatsApp > Perangkat Tertaut > Tautkan Perangkat):
+1. Scan QR dengan nomor WA bot (WhatsApp > Perangkat Tertaut > Tautkan Perangkat).
+
+   QR sebagai gambar (disarankan; QR di terminal sering tampil gepeng):
+   buka tunnel SSH dari PC ke server, lalu buka `http://localhost:3001/qr`
+   di browser PC. Halaman memuat ulang sendiri dan berubah menjadi
+   "Bot sudah terhubung" setelah scan berhasil.
+
+   - PowerShell / terminal di PC (biarkan jendelanya terbuka selama scan):
+
+     ```bash
+     ssh -L 3001:127.0.0.1:3001 root@172.16.32.209
+     ```
+
+   - PuTTY: Connection > SSH > Tunnels, isi Source port `3001` dan
+     Destination `127.0.0.1:3001`, klik Add, lalu sambungkan seperti biasa.
+
+   QR di terminal (bila terminalnya menampilkan QR dengan benar):
 
    ```bash
    sudo journalctl -u izinsiswa-wa -f -o cat

@@ -31,36 +31,8 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --canvas: #151e27;
-    --surface: #1e2a36;
-    --sunken: #253341;
-    --ink: #ecf0f1;
-    --heading: #ffffff;
-    --muted: #a9b4be;
-    --line: #34495e;
-    --field: #6b7f92;
-    --brand: #ecf0f1;
-    --brand-hover: #ffffff;
-    --on-brand: #2c3e50;
-    --chrome: #0f1720;
-    --on-chrome: #ecf0f1;
-    --link: #7fb8e6;
-    --focus: #5dade2;
-    --info-soft: #1d3347;
-    --ok: #58d68d;
-    --ok-text: #58d68d;
-    --on-ok: #10241a;
-    --ok-soft: #1b3a2a;
-    --bad: #f1948a;
-    --bad-text: #f1948a;
-    --on-bad: #1a0d0b;
-    --bad-soft: #3d2220;
-    color-scheme: dark;
-  }
-}
-
+/* Default selalu terang, apa pun tema perangkat; gelap hanya bila dipilih
+   lewat tombol tema (data-theme="dark", tersimpan di localStorage). */
 :root[data-theme="dark"] {
   --canvas: #151e27;
   --surface: #1e2a36;

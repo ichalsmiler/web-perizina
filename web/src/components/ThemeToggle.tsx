@@ -6,21 +6,17 @@ type Theme = "light" | "dark";
 
 const listeners = new Set<() => void>();
 
+// Tema perangkat sengaja diabaikan: default selalu terang.
 function currentTheme(): Theme {
-  const attr = document.documentElement.getAttribute("data-theme");
-  if (attr === "light" || attr === "dark") return attr;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
+  return document.documentElement.getAttribute("data-theme") === "dark"
     ? "dark"
     : "light";
 }
 
 function subscribe(callback: () => void) {
   listeners.add(callback);
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  media.addEventListener("change", callback);
   return () => {
     listeners.delete(callback);
-    media.removeEventListener("change", callback);
   };
 }
 

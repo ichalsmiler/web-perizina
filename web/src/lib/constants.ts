@@ -24,6 +24,9 @@ export const ALLOWED_DOCUMENT_TYPES = [
 export const ALLOWED_SELFIE_TYPES = ["image/jpeg", "image/png"];
 export const MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
+/** Masa simpan selfie + dokumen sejak diajukan (lihat lib/attachmentRetention.ts). */
+export const ATTACHMENT_RETENTION_DAYS = 7;
+
 export function leaveTypeLabel(value: string): string {
   return LEAVE_TYPES.find((t) => t.value === value)?.label ?? value;
 }

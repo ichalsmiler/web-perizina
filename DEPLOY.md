@@ -43,8 +43,8 @@ sudo bash /opt/izinsiswa/install.sh
 ```
 
 On update it:
-- backs up `web/prisma/dev.db`, `web/storage/`, and `web/.env` to
-  `/var/backups/izinsiswa/` (the last 10 are kept);
+- backs up `web/prisma/dev.db` and `web/.env` to `/var/backups/izinsiswa/`
+  (the last 10 are kept; `web/storage/` is left out, see section 4);
 - pulls the latest `main` from GitHub (fast-forward only);
 - keeps `.env`, the admin password, and the service's bind address
   (`127.0.0.1` after `setup-https.sh`, otherwise `0.0.0.0`);
@@ -78,16 +78,29 @@ sudo journalctl -u izinsiswa -f      # live logs
 
 Two things hold real data and live **outside** git (see `web/.gitignore`):
 
-- `web/prisma/dev.db` — the SQLite database.
-- `web/storage/` — uploaded documents and selfies.
+- `web/prisma/dev.db`: the SQLite database (leave records, students, settings).
+- `web/storage/`: uploaded selfies and supporting documents.
 
-Back these up regularly, e.g.:
+**Retention:** selfies and documents are kept for 7 days after submission
+(`ATTACHMENT_RETENTION_DAYS` in `web/src/lib/constants.ts`). The
+`izinsiswa-purge.timer` runs every hour and deletes them once a request is
+approved or rejected and older than 7 days; pending requests keep theirs until
+decided. The leave record itself is kept, marked with `attachmentsPurgedAt`.
 
 ```bash
-tar -czf izinsiswa-backup-$(date +%F).tar.gz -C /opt izinsiswa/web/prisma/dev.db izinsiswa/web/storage
+sudo systemctl list-timers izinsiswa-purge.timer     # next run
+sudo journalctl -u izinsiswa-purge.service -n 20     # what was deleted
 ```
 
-(Adjust the path if you cloned somewhere other than `/opt/izinsiswa`.)
+Back up the database regularly, e.g.:
+
+```bash
+tar -czf izinsiswa-backup-$(date +%F).tar.gz -C /opt izinsiswa/web/prisma/dev.db
+```
+
+Do not keep long-lived backups of `web/storage/`: they would hold selfies past
+the 7-day retention. (Adjust the path if you cloned somewhere other than
+`/opt/izinsiswa`.)
 
 ## 5. HTTP on the school LAN and optional HTTPS
 

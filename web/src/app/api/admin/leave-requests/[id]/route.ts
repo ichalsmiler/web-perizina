@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess } from "@/lib/apiResponse";
+import { ATTACHMENT_RETENTION_DAYS, attachmentsDeleteAfter } from "@/lib/attachmentRetention";
 
 export async function GET(
   _request: Request,
@@ -38,7 +39,10 @@ export async function GET(
     endDate: r.endDate,
     reason: r.reason,
     documentUrl: r.documentUrl ? `/api/files/${r.documentUrl}` : null,
-    selfieUrl: `/api/files/${r.selfieUrl}`,
+    selfieUrl: r.selfieUrl ? `/api/files/${r.selfieUrl}` : null,
+    attachmentsPurgedAt: r.attachmentsPurgedAt,
+    attachmentsDeleteAfter: attachmentsDeleteAfter(r.createdAt),
+    retentionDays: ATTACHMENT_RETENTION_DAYS,
     status: r.status,
     adminNotes: r.adminNotes,
     processedBy: r.admin?.fullName ?? null,

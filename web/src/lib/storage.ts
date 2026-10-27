@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile, readFile } from "fs/promises";
+import { mkdir, writeFile, readFile, unlink } from "fs/promises";
 import path from "path";
 
 // Local-disk stand-in for the private AWS S3 bucket described in DATABASE.md/API.md.
@@ -22,6 +22,16 @@ export async function saveUploadedFile(
   await writeFile(path.join(dir, fileName), buffer);
 
   return `${kind}/${fileName}`;
+}
+
+/** Menghapus file tersimpan. File yang sudah tidak ada dianggap berhasil. */
+export async function deleteStoredFile(key: string): Promise<void> {
+  const safeKey = key.replace(/\.\./g, "");
+  try {
+    await unlink(path.join(STORAGE_ROOT, safeKey));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
 }
 
 /** Resolves a stored file key (e.g. "documents/abc.pdf") to its bytes and best-guess content type. */

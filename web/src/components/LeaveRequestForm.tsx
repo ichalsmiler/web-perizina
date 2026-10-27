@@ -5,6 +5,7 @@ import Link from "next/link";
 import SelfieCapture from "@/components/SelfieCapture";
 import {
   ALLOWED_DOCUMENT_TYPES,
+  ATTACHMENT_RETENTION_DAYS,
   LEAVE_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
 } from "@/lib/constants";
@@ -351,7 +352,8 @@ export default function LeaveRequestForm({ student }: Props) {
           </p>
           <p className="hint mb-2">
             Foto wajah orang tua/wali yang mengajukan. Dipakai sekolah untuk
-            memastikan pengajuan ini benar dari Anda.
+            memastikan pengajuan ini benar dari Anda. Foto dan dokumen hanya
+            disimpan {ATTACHMENT_RETENTION_DAYS} hari, lalu dihapus otomatis.
           </p>
           <SelfieCapture onCapture={setSelfie} />
         </div>

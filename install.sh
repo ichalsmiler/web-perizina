@@ -39,6 +39,7 @@ BRANCH="${BRANCH:-main}"
 SERVICE_USER="izinsiswa"
 SERVICE_NAME="izinsiswa"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+PURGE_NAME="izinsiswa-purge"
 WA_SERVICE_NAME="izinsiswa-wa"
 WA_SERVICE_FILE="/etc/systemd/system/${WA_SERVICE_NAME}.service"
 BACKUP_DIR="/var/backups/izinsiswa"
@@ -118,11 +119,13 @@ fi
 # --- 3. Kode aplikasi --------------------------------------------------------
 BACKUP_FILE=""
 if [[ "$MODE" == "update" ]]; then
-  step "Backup database, file unggahan, dan .env"
+  step "Backup database dan .env"
   mkdir -p "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
   ITEMS=()
-  for p in web/prisma/dev.db web/storage web/.env wa-gateway/.env wa-gateway/auth_info_baileys; do
+  # web/storage (selfie & dokumen) sengaja tidak dibackup: update tidak menyentuhnya,
+  # dan salinan di backup akan melanggar masa simpan 7 hari.
+  for p in web/prisma/dev.db web/.env wa-gateway/.env wa-gateway/auth_info_baileys; do
     if [[ -e "$INSTALL_DIR/$p" ]]; then ITEMS+=("$p"); fi
   done
   if (( ${#ITEMS[@]} > 0 )); then
@@ -292,7 +295,39 @@ if [[ "$CODE" != "200" ]]; then
 fi
 ok "Aplikasi berjalan (HTTP 200)"
 
-# --- 7. Gateway WA (opsional) ------------------------------------------------
+# --- 7. Hapus otomatis foto & dokumen lewat masa simpan ----------------------
+step "Memasang timer $PURGE_NAME (hapus foto & dokumen lewat 7 hari, tiap jam)"
+cat > "/etc/systemd/system/${PURGE_NAME}.service" <<SVCEOF
+[Unit]
+Description=IzinSiswa: hapus selfie dan dokumen yang lewat masa simpan
+After=$SERVICE_NAME.service
+
+[Service]
+Type=oneshot
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$WEB_DIR
+EnvironmentFile=$WEB_DIR/.env
+ExecStart=/usr/bin/npm run --silent purge-attachments
+NoNewPrivileges=true
+PrivateTmp=true
+SVCEOF
+cat > "/etc/systemd/system/${PURGE_NAME}.timer" <<SVCEOF
+[Unit]
+Description=IzinSiswa: jadwal hapus selfie dan dokumen lewat masa simpan
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+SVCEOF
+systemctl daemon-reload
+systemctl enable --quiet --now "${PURGE_NAME}.timer"
+ok "Timer aktif. Log: sudo journalctl -u ${PURGE_NAME}.service"
+
+# --- 8. Gateway WA (opsional) ------------------------------------------------
 WA_CONNECTED=0
 if [[ "$WA_ON" == "1" ]]; then
   step "Memasang service $WA_SERVICE_NAME (rekap izin ke grup WA)"

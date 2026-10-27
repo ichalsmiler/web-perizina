@@ -26,7 +26,10 @@ type Detail = {
   endDate: string;
   reason: string | null;
   documentUrl: string | null;
-  selfieUrl: string;
+  selfieUrl: string | null;
+  attachmentsPurgedAt: string | null;
+  attachmentsDeleteAfter: string;
+  retentionDays: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
   adminNotes: string | null;
   processedBy: string | null;
@@ -326,19 +329,39 @@ export default function RequestDetailPage({
           <h2 id="h-bukti" className="sr-only">
             Bukti pengajuan
           </h2>
+          {detail.attachmentsPurgedAt ? (
+            <div className="card p-5">
+              <p className="font-semibold text-heading">Foto dan dokumen sudah dihapus</p>
+              <p className="hint mt-1">
+                Dihapus otomatis pada {formatDate(detail.attachmentsPurgedAt)}, karena lampiran
+                hanya disimpan {detail.retentionDays} hari setelah pengajuan. Catatan izin di
+                samping tetap tersimpan.
+              </p>
+            </div>
+          ) : (
+          <>
+          <p className="hint">
+            {detail.status === "PENDING"
+              ? `Foto dan dokumen disimpan sampai permohonan diputuskan, lalu dihapus otomatis bila sudah lewat ${detail.retentionDays} hari sejak diajukan.`
+              : `Foto dan dokumen dihapus otomatis mulai ${formatDate(detail.attachmentsDeleteAfter)} (${detail.retentionDays} hari setelah diajukan).`}
+          </p>
           <figure className="card p-4">
             <figcaption className="flex items-center justify-between gap-2 mb-3">
               <span className="font-semibold text-heading">Foto verifikasi pengaju</span>
-              <a href={detail.selfieUrl} target="_blank" rel="noreferrer" className="link text-sm">
-                Buka ukuran penuh
-              </a>
+              {detail.selfieUrl && (
+                <a href={detail.selfieUrl} target="_blank" rel="noreferrer" className="link text-sm">
+                  Buka ukuran penuh
+                </a>
+              )}
             </figcaption>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={detail.selfieUrl}
-              alt={`Foto verifikasi ${detail.submitter.parentName}`}
-              className="w-full max-h-[420px] object-contain rounded bg-sunken"
-            />
+            {detail.selfieUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={detail.selfieUrl}
+                alt={`Foto verifikasi ${detail.submitter.parentName}`}
+                className="w-full max-h-[420px] object-contain rounded bg-sunken"
+              />
+            )}
           </figure>
 
           <figure className="card p-4">
@@ -369,6 +392,8 @@ export default function RequestDetailPage({
               <p className="text-sm text-muted">Orang tua tidak melampirkan dokumen.</p>
             )}
           </figure>
+          </>
+          )}
         </section>
       </div>
     </div>

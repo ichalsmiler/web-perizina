@@ -56,7 +56,9 @@ model LeaveRequest {
   parentName      String // Filled by the submitter, mandatory
   parentWhatsapp  String // Filled by the submitter, mandatory
   documentUrl String?
-  selfieUrl   String
+  selfieUrl   String // "" setelah lampiran dihapus otomatis
+  // Kapan selfie + dokumen dihapus otomatis (masa simpan, lib/attachmentRetention.ts).
+  attachmentsPurgedAt DateTime?
   status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
   adminId     String?
   adminNotes  String?

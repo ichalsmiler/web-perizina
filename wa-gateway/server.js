@@ -14,15 +14,24 @@
  * Untuk volume kecil seperti ini (3 pesan/hari) biasanya aman, tapi tetap
  * pakai nomor khusus, jangan nomor pribadi.
  */
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const express = require('express');
-const cron = require('node-cron');
-const fs = require('fs');
-const path = require('path');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
+// ESM: Baileys 6.7.24 dipublikasikan sebagai paket ESM ("type": "module").
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import express from 'express';
+import cron from 'node-cron';
+import pino from 'pino';
+import qrcode from 'qrcode-terminal';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const PORT = process.env.PORT || 3001;
 // Hanya dengar di localhost: endpoint /send bisa mengirim pesan WA atas nama bot.
@@ -47,7 +56,18 @@ let reconnectTimer = null;
 // ---------- Koneksi WhatsApp (Baileys) ----------
 async function connect() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  // WhatsApp menolak versi protokol lama (putus dengan kode 405 sebelum QR muncul).
+  // Ambil versi terbaru; bila gagal, pakai bawaan Baileys.
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+    console.log('Versi protokol WhatsApp Web:', version.join('.'));
+  } catch (e) {
+    console.log('Gagal cek versi WhatsApp Web terbaru, pakai bawaan Baileys:', e.message);
+  }
+  console.log('Menyambung ke WhatsApp...');
   sock = makeWASocket({
+    ...(version ? { version } : {}),
     auth: state,
     logger: pino({ level: 'silent' }),
   });

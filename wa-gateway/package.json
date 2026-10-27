@@ -4,7 +4,7 @@
   "private": true,
   "description": "Gateway WhatsApp (Baileys) untuk kirim rekap izin IzinSiswa ke grup WA",
   "main": "server.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },

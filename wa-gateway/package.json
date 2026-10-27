@@ -1,0 +1,20 @@
+{
+  "name": "wa-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gateway WhatsApp (Baileys) untuk kirim rekap izin IzinSiswa ke grup WA",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "6.7.24",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

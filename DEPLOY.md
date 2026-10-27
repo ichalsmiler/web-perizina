@@ -56,6 +56,14 @@ the database, `.env`, and uploads are untracked and never touched.
 
 Other options (environment variables): `ADMIN_PASSWORD` to change the admin
 password during an update, `INSTALL_DIR`, `BRANCH`, `PORT`, `BIND_HOST`.
+`PORT` and `BIND_HOST` default to the values in the existing service file.
+
+### Optional: daily leave summary to a WhatsApp group
+
+`sudo WA_GATEWAY=1 bash install.sh` also installs `wa-gateway/` as the
+`izinsiswa-wa` service. It sends approved leave requests submitted today to one
+WhatsApp group, Monday to Friday at 07:15, 07:45, and 08:15 WITA. Setup (QR scan,
+group ID) is in [wa-gateway/README.md](wa-gateway/README.md).
 
 ## 3. Useful commands
 

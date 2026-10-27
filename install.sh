@@ -20,9 +20,11 @@
 #    ADMIN_PASSWORD  password admin; saat update, isi hanya bila ingin mengganti
 #    INSTALL_DIR     lokasi aplikasi (default: /opt/izinsiswa)
 #    BRANCH          branch GitHub (default: main)
-#    PORT            port aplikasi (default: 3000)
-#    BIND_HOST       alamat dengar (default: tetap seperti sebelumnya, atau
-#                    0.0.0.0 untuk pasang baru; setup-https.sh memakai 127.0.0.1)
+#    PORT, BIND_HOST port dan alamat dengar (default: tetap seperti sebelumnya,
+#                    atau 3000 dan 0.0.0.0 untuk pasang baru;
+#                    setup-https.sh memakai 127.0.0.1)
+#    WA_GATEWAY=1    ikut pasang gateway rekap izin ke grup WhatsApp
+#                    (sekali saja; update berikutnya otomatis ikut)
 #    FORCE_RESET=1   buang perubahan manual pada file kode di server saat update
 #                    (database, .env, dan file unggahan tidak tersentuh)
 #
@@ -34,12 +36,29 @@ set -euo pipefail
 REPO_URL="https://github.com/ichalsmiler/web-perizina.git"
 INSTALL_DIR="${INSTALL_DIR:-/opt/izinsiswa}"
 BRANCH="${BRANCH:-main}"
-PORT="${PORT:-3000}"
 SERVICE_USER="izinsiswa"
 SERVICE_NAME="izinsiswa"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+WA_SERVICE_NAME="izinsiswa-wa"
+WA_SERVICE_FILE="/etc/systemd/system/${WA_SERVICE_NAME}.service"
 BACKUP_DIR="/var/backups/izinsiswa"
 WEB_DIR="$INSTALL_DIR/web"
+WA_DIR="$INSTALL_DIR/wa-gateway"
+
+# Port dan alamat dengar: pakai nilai dari service lama bila tidak diisi, supaya
+# update tidak diam-diam mengembalikan port kustom ke 3000.
+if [[ -z "${PORT:-}" ]]; then
+  PORT=$(grep -oP '^ExecStart=.*next start.*-p \K[0-9]+' "$SERVICE_FILE" 2>/dev/null || true)
+  PORT="${PORT:-3000}"
+fi
+if [[ -z "${BIND_HOST:-}" ]]; then
+  # Mis. 127.0.0.1 dari setup-https.sh.
+  BIND_HOST=$(grep -oP '^ExecStart=.*next start.*-H \K[^ ]+' "$SERVICE_FILE" 2>/dev/null || true)
+  BIND_HOST="${BIND_HOST:-0.0.0.0}"
+fi
+
+# Gateway WA ikut dipasang bila diminta, atau bila sudah pernah dipasang.
+if [[ "${WA_GATEWAY:-0}" == "1" || -f "$WA_SERVICE_FILE" ]]; then WA_ON=1; else WA_ON=0; fi
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 step() { echo -e "\n${CYAN}==>${NC} $*"; }
@@ -103,7 +122,7 @@ if [[ "$MODE" == "update" ]]; then
   mkdir -p "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
   ITEMS=()
-  for p in web/prisma/dev.db web/storage web/.env; do
+  for p in web/prisma/dev.db web/storage web/.env wa-gateway/.env wa-gateway/auth_info_baileys; do
     if [[ -e "$INSTALL_DIR/$p" ]]; then ITEMS+=("$p"); fi
   done
   if (( ${#ITEMS[@]} > 0 )); then
@@ -154,6 +173,26 @@ else
   ok ".env lama dipakai, tidak diubah"
 fi
 
+if [[ "$WA_ON" == "1" ]]; then
+  # Token bersama: web memeriksa WA_REKAP_TOKEN, gateway mengirimnya sebagai IZIN_API_TOKEN.
+  if ! grep -q '^WA_REKAP_TOKEN=' .env; then
+    echo "WA_REKAP_TOKEN=$(/usr/bin/node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" >> .env
+    ok "WA_REKAP_TOKEN ditambahkan ke web/.env"
+  fi
+  WA_TOKEN=$(grep -m1 '^WA_REKAP_TOKEN=' .env | cut -d= -f2-)
+  if [[ ! -f "$WA_DIR/.env" ]]; then
+    API_KEY_NEW=$(/usr/bin/node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")
+    sed -e "s|^API_KEY=.*|API_KEY=$API_KEY_NEW|" \
+        -e "s|^IZIN_API_TOKEN=.*|IZIN_API_TOKEN=$WA_TOKEN|" \
+        -e "s|^IZIN_API_URL=.*|IZIN_API_URL=http://127.0.0.1:$PORT/api/integrations/wa-rekap|" \
+        "$WA_DIR/.env.example" > "$WA_DIR/.env"
+    chmod 600 "$WA_DIR/.env"
+    ok "wa-gateway/.env dibuat (API_KEY acak, token tersambung ke aplikasi)"
+  else
+    ok "wa-gateway/.env lama dipakai, tidak diubah"
+  fi
+fi
+
 # Pasang baru tanpa ADMIN_PASSWORD: tanyakan di terminal bila ada (juga saat lewat curl | bash).
 if [[ "$MODE" == "baru" && -z "${ADMIN_PASSWORD:-}" ]] && { : </dev/tty; } 2>/dev/null; then
   step "Akun admin sekolah"
@@ -200,16 +239,14 @@ if ! npm run --silent seed 2>&1 | sed 's/^/      /'; then
 fi
 
 run "Build produksi (beberapa menit)" npm run build
+if [[ "$WA_ON" == "1" ]]; then
+  # Tanpa package-lock: libsignal milik Baileys diambil dari git, versi Baileys dikunci di package.json.
+  run "Dependensi gateway WA" npm --prefix "$WA_DIR" install --omit=dev --no-audit --no-fund
+fi
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 ok "Kepemilikan file: $SERVICE_USER"
 
 # --- 6. Service systemd ------------------------------------------------------
-if [[ -z "${BIND_HOST:-}" ]]; then
-  # Pertahankan alamat dengar lama (mis. 127.0.0.1 dari setup-https.sh).
-  BIND_HOST=$(grep -oP '^ExecStart=.*next start.*-H \K[^ ]+' "$SERVICE_FILE" 2>/dev/null || true)
-  BIND_HOST="${BIND_HOST:-0.0.0.0}"
-fi
-
 step "Memasang service $SERVICE_NAME (dengar di $BIND_HOST:$PORT)"
 cat > "$SERVICE_FILE" <<SVCEOF
 [Unit]
@@ -254,6 +291,52 @@ if [[ "$CODE" != "200" ]]; then
        Data sebelum update ada di: $BACKUP_FILE}"
 fi
 ok "Aplikasi berjalan (HTTP 200)"
+
+# --- 7. Gateway WA (opsional) ------------------------------------------------
+WA_CONNECTED=0
+if [[ "$WA_ON" == "1" ]]; then
+  step "Memasang service $WA_SERVICE_NAME (rekap izin ke grup WA)"
+  cat > "$WA_SERVICE_FILE" <<SVCEOF
+[Unit]
+Description=IzinSiswa gateway WhatsApp (rekap izin ke grup)
+After=network-online.target $SERVICE_NAME.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$WA_DIR
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node $WA_DIR/server.js
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+  systemctl daemon-reload
+  systemctl enable --quiet "$WA_SERVICE_NAME"
+  systemctl restart "$WA_SERVICE_NAME"
+
+  WA_PORT=$(grep -m1 '^PORT=' "$WA_DIR/.env" | cut -d= -f2- || true)
+  WA_PORT="${WA_PORT:-3001}"
+  STATUS=""
+  for _ in $(seq 1 10); do
+    STATUS=$(curl -s -m 3 "http://127.0.0.1:$WA_PORT/status" || true)
+    [[ -n "$STATUS" ]] && break
+    sleep 2
+  done
+  if [[ -z "$STATUS" ]]; then
+    journalctl -u "$WA_SERVICE_NAME" -n 20 --no-pager >&2 || true
+    warn "Gateway WA belum merespons (log di atas). Aplikasi utama tetap berjalan."
+  else
+    ok "Gateway WA berjalan di 127.0.0.1:$WA_PORT"
+    if grep -q '"connected":true' <<<"$STATUS"; then WA_CONNECTED=1; fi
+  fi
+fi
 rm -f "$LOG_FILE"
 
 # --- Selesai -----------------------------------------------------------------
@@ -273,6 +356,19 @@ if [[ "$MODE" == "baru" ]]; then
   fi
 fi
 if [[ -n "$BACKUP_FILE" ]]; then echo "  Backup sebelum update: $BACKUP_FILE"; fi
+if [[ "$WA_ON" == "1" ]]; then
+  echo
+  if [[ "$WA_CONNECTED" == "1" ]] && grep -q '^GROUP_JID=.\+' "$WA_DIR/.env"; then
+    echo "  Gateway WA: terhubung, rekap terkirim Senin-Jumat 07.15, 07.45, 08.15 WITA."
+  else
+    echo "  Gateway WA belum siap. Langkah sekali saja:"
+    echo "    1. Scan QR dengan nomor WA bot (WhatsApp > Perangkat Tertaut):"
+    echo "         sudo journalctl -u $WA_SERVICE_NAME -f -o cat"
+    echo "    2. Lihat ID grup tujuan (bot harus sudah jadi anggota grup):"
+    echo "         sudo bash -c 'curl -s -H \"X-Api-Key: \$(grep ^API_KEY= $WA_DIR/.env | cut -d= -f2)\" http://127.0.0.1:${WA_PORT:-3001}/groups'"
+    echo "    3. Isi GROUP_JID di $WA_DIR/.env, lalu: sudo systemctl restart $WA_SERVICE_NAME"
+  fi
+fi
 echo
 echo "  Update berikutnya : sudo bash $INSTALL_DIR/install.sh"
 echo "  Status / log      : sudo systemctl status $SERVICE_NAME  |  sudo journalctl -u $SERVICE_NAME -f"

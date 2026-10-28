@@ -35,6 +35,18 @@ import { Boom } from '@hapi/boom';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+// libsignal (enkripsi WhatsApp di dalam Baileys) mencetak isi sesi lewat console,
+// termasuk kunci privat, sehingga ikut tersimpan di journal sistem. Pesan-pesan itu
+// (dan galat dekripsi rutinnya) dibuang; log gateway sendiri tidak terpengaruh.
+const LIBSIGNAL_NOISE = /^(Closing session|Opening session|Removing old closed session|Migrating session|Closing open session|Closing stale open session|Session already (open|closed)|Decrypted message with closed session|Session error|Failed to decrypt message|V1 session storage|WARNING: Expected pubkey|Unhandled bucket type)/;
+for (const level of ['log', 'info', 'warn', 'error']) {
+  const original = console[level].bind(console);
+  console[level] = (first, ...rest) => {
+    if (typeof first === 'string' && LIBSIGNAL_NOISE.test(first)) return;
+    original(first, ...rest);
+  };
+}
+
 const PORT = process.env.PORT || 3001;
 // Hanya dengar di localhost: endpoint /send bisa mengirim pesan WA atas nama bot.
 const HOST = process.env.HOST || '127.0.0.1';

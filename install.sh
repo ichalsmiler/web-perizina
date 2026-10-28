@@ -89,6 +89,8 @@ elif [[ -e "$INSTALL_DIR" && -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
 else
   MODE="baru"
 fi
+# Setelah lanjut ke installer baru, repo sudah ada; pakai mode dari jalannya yang pertama.
+MODE="${IZS_MODE:-$MODE}"
 
 echo -e "${CYAN}IzinSiswa installer${NC} (mode: $MODE, lokasi: $INSTALL_DIR)"
 
@@ -118,7 +120,10 @@ fi
 
 # --- 3. Kode aplikasi --------------------------------------------------------
 BACKUP_FILE=""
-if [[ "$MODE" == "update" ]]; then
+if [[ -n "${IZS_PULLED:-}" ]]; then
+  # Lanjutan dari installer lama: backup dan pull sudah dikerjakan.
+  BACKUP_FILE="${IZS_BACKUP_FILE:-}"
+elif [[ "$MODE" == "update" ]]; then
   step "Backup database dan .env"
   mkdir -p "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
@@ -161,6 +166,15 @@ else
   step "Mengunduh aplikasi dari GitHub"
   git clone --quiet --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
   ok "Kode di versi $(g log -1 --format='%h %s')"
+fi
+
+# Kode baru bisa membawa installer baru. Lanjutkan dengan versi itu, bukan salinan
+# lama yang sedang berjalan; kalau tidak, langkah yang baru ditambahkan terlewat.
+if [[ -z "${IZS_PULLED:-}" ]] && ! { [[ -f "$SELF" ]] && cmp -s "$SELF" "$INSTALL_DIR/install.sh"; }; then
+  ok "Installer ikut diperbarui, melanjutkan dengan versi baru"
+  TMP_NEW="$(mktemp /tmp/izinsiswa-install.XXXXXX.sh)"
+  cp "$INSTALL_DIR/install.sh" "$TMP_NEW"
+  IZS_REEXEC=1 IZS_PULLED=1 IZS_MODE="$MODE" IZS_BACKUP_FILE="$BACKUP_FILE" exec bash "$TMP_NEW" "$@"
 fi
 
 [[ -f "$WEB_DIR/package.json" ]] || die "Folder web/ tidak ditemukan di $INSTALL_DIR."
